@@ -112,15 +112,28 @@ npm run list-models
 `AI_PROVIDER` 한 줄로 갈아끼웁니다. 프롬프트와 출력 스키마는 양쪽이 공유하므로
 어느 쪽을 쓰든 화면에 들어오는 형식은 같습니다.
 
-| | Gemini | Claude |
-| --- | --- | --- |
-| `AI_PROVIDER` | `gemini` | `claude` |
-| 키 | `GEMINI_API_KEY` | `ANTHROPIC_API_KEY` |
-| 기본 모델 | `gemini-3.6-flash` | `claude-opus-5` |
-| 모델 변경 | `GEMINI_MODEL` | `ANTHROPIC_MODEL` |
-| 비용 | 무료 등급 있음 | 선불 크레딧 필요 |
+| | Gemini | Claude API | Claude CLI |
+| --- | --- | --- | --- |
+| `AI_PROVIDER` | `gemini` | `claude` | `claude-cli` |
+| 키 | `GEMINI_API_KEY` | `ANTHROPIC_API_KEY` | 없음 (Claude Code 로그인) |
+| 기본 모델 | `gemini-3.6-flash` | `claude-opus-5` | `sonnet` |
+| 모델 변경 | `GEMINI_MODEL` | `ANTHROPIC_MODEL` | `CLAUDE_CLI_MODEL` |
+| 비용 | 무료 등급 있음 | 선불 크레딧 필요 | 구독 사용량 차감 |
 
 `AI_PROVIDER` 를 비워두면 키가 들어 있는 쪽을 자동으로 씁니다(둘 다 있으면 Gemini).
+
+**Claude CLI** 는 이 PC 에 설치된 Claude Code 를 헤드리스(`claude -p`)로 띄워 쓰는 방식입니다.
+API 키가 필요 없고 구독 사용량(5시간 창)에서 차감됩니다. Claude Code 가 로그인된 PC 에서만 돌고
+배포는 안 되므로 데모 전용입니다. 도구는 전부 끄고, MCP 와 세션 저장도 하지 않으며,
+호출당 기동에 몇 초가 더 걸립니다. `AI_PROVIDER=claude-cli npm run check-ai` 로 먼저 확인하세요.
+
+**Gemini 무료 한도 아끼기**: 질문 생성은 쉬운 일이라 한도가 넉넉한 모델에 맡기고,
+답변 정리만 기본 모델을 쓰게 나눌 수 있습니다. 회의 한 건에 기본 모델 호출이 절반으로 줍니다.
+
+```
+GEMINI_MODEL=gemini-3.6-flash
+GEMINI_QUESTION_MODEL=gemini-3.5-flash-lite
+```
 
 > 무료 등급은 분당·일당 요청 수 제한이 있습니다. 회의 하나에 라운드 수만큼 호출하므로
 > 개인·소규모 사용에는 충분하지만, 무료 등급으로 보낸 내용은 Google 의 모델 개선에
@@ -164,6 +177,7 @@ lib/
     prompts.ts                시스템 프롬프트 · 출력 스키마 · 프롬프트 조립 (공유)
     gemini.ts                 Gemini 구현
     claude.ts                 Claude 구현
+    claude-cli.ts             Claude Code CLI 구현 (구독 로그인, 데모 전용)
     mock.ts                   키 없이 쓰는 고정 응답
   db.ts                       SQLite 스키마와 쿼리
   decision.ts                 결론 초안 만들기 · 입력 검증
@@ -179,7 +193,7 @@ samples/
 ```
 
 - **AI**: 앱은 `generateInitialQuestions` / `synthesizeAndFollowUp` 두 함수만 부르고,
-  어떤 모델을 쓸지는 [lib/ai.ts](lib/ai.ts) 가 정합니다. 모델을 하나 더 붙이려면
+  어떤 모델을 쓸지는 [lib/ai.ts](lib/ai.ts) 가 정합니다 (gemini / claude / claude-cli / mock). 모델을 하나 더 붙이려면
   `lib/ai/` 에 파일 하나를 추가하고 dispatcher에 등록하면 됩니다.
 - **질문 품질**을 바꾸고 싶으면 [lib/ai/prompts.ts](lib/ai/prompts.ts) 의 `SYSTEM` 상수를 고치세요.
   여기에 질문 설계 원칙이 들어 있고 provider 양쪽이 같은 걸 씁니다.
