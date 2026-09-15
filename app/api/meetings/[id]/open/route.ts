@@ -1,4 +1,4 @@
-import { getMeeting, getRound, setMeetingStatus, setRoundStatus } from "@/lib/db";
+import { getMeeting, getRound, openRound, setMeetingStatus } from "@/lib/db";
 import { fail, handleError, ok } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -22,7 +22,7 @@ export async function POST(
     if (round.status !== "draft") return fail("이미 공개된 라운드입니다.");
     if (round.questions.length === 0) return fail("질문이 없습니다.");
 
-    setRoundStatus(round.id, "open");
+    openRound(round.id);
     setMeetingStatus(id, "collecting");
 
     return ok({ round: getRound(id, round.roundNo) });

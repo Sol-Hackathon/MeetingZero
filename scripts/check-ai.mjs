@@ -77,8 +77,42 @@ try {
     console.log(`✓ Claude 연결 성공 — ${model} (${Date.now() - started}ms)`);
     console.log("  응답:", text);
     console.log("  입력/출력 토큰:", response.usage.input_tokens, "/", response.usage.output_tokens);
+  } else if (provider === "claude-cli") {
+    // 이 PC 의 Claude Code 구독 로그인으로 헤드리스 호출. 키 없음, 데모 전용.
+    const { spawn } = await import("node:child_process");
+    const model = process.env.CLAUDE_CLI_MODEL || "sonnet";
+    // Claude Code 안에서 실행하면 넘어오는 변수. 남기면 중첩 세션으로 보고 거부한다.
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(([k]) => k !== "CLAUDECODE" && !k.startsWith("CLAUDE_CODE_")),
+    );
+    const started = Date.now();
+    const output = await new Promise((resolve, reject) => {
+      const child = spawn(
+        process.env.CLAUDE_CLI_PATH || "claude",
+        ["-p", "--output-format", "json", "--json-schema", JSON.stringify(SCHEMA), "--tools", "",
+          "--strict-mcp-config", "--no-session-persistence", "--model", model],
+        { env, stdio: ["pipe", "pipe", "pipe"], windowsHide: true },
+      );
+      let out = "";
+      let err = "";
+      child.stdout.on("data", (d) => (out += d));
+      child.stderr.on("data", (d) => (err += d));
+      child.on("error", (e) =>
+        reject(e.code === "ENOENT" ? new Error("claude 명령을 찾을 수 없습니다. Claude Code 를 설치하고 로그인하세요.") : e),
+      );
+      child.on("close", (code) =>
+        code === 0 ? resolve(out) : reject(new Error(`exit ${code}: ${(err || out).trim().slice(-300)}`)),
+      );
+      child.stdin.on("error", () => {});
+      child.stdin.end(PROMPT);
+    });
+    const envelope = JSON.parse(output);
+    if (envelope.is_error) throw new Error(envelope.result);
+    console.log(`✓ Claude CLI 연결 성공 — ${model} (${Date.now() - started}ms)`);
+    console.log("  구조화 출력:", JSON.stringify(envelope.structured_output));
+    console.log("  구독 사용량에서 차감됩니다. Claude Code 가 로그인된 이 PC 에서만 동작합니다.");
   } else {
-    throw new Error(`AI_PROVIDER 값이 올바르지 않습니다: "${provider}" (gemini 또는 claude)`);
+    throw new Error(`AI_PROVIDER 값이 올바르지 않습니다: "${provider}" (gemini, claude 또는 claude-cli)`);
   }
 } catch (error) {
   console.error(`✗ ${provider} 호출 실패`);

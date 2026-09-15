@@ -1,6 +1,17 @@
-export type MeetingStatus = "draft" | "collecting" | "closed";
+export type MeetingStatus = "draft" | "collecting" | "deciding" | "closed";
 export type RoundStatus = "draft" | "open" | "closed";
 export type QuestionKind = "open" | "choice" | "scale";
+
+/** 주최자가 확정한 최종 결론 */
+export interface Decision {
+  /** 정해진 것 */
+  decided: { point: string; basis: string }[];
+  /** 모여서 정할 것. attendees 는 그 자리에 있어야 할 사람 */
+  toMeet: { topic: string; crux: string; attendees: string[] }[];
+  /** 주최자 메모 */
+  note: string;
+  decidedAt: string;
+}
 
 export interface Meeting {
   id: string;
@@ -9,7 +20,9 @@ export interface Meeting {
   background: string;
   goal: string;
   maxRounds: number;
+  /** draft(검토 중) → collecting(답변 수집) → deciding(결론 대기) → closed(결론 확정) */
   status: MeetingStatus;
+  decision: Decision | null;
   createdAt: string;
 }
 

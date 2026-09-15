@@ -5,3 +5,6 @@ data/*.db-journal
 .env.local
 next-env.d.ts
 *.tsbuildinfo
+data/*.db-shm
+data/*.db-wal
+.gstack/

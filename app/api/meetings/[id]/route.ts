@@ -1,4 +1,4 @@
-import { countSubmissions, getMeeting, listRounds, listSubmissions } from "@/lib/db";
+import { getMeeting, listRoundsWithSubmissions } from "@/lib/db";
 import { fail, handleError, ok } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -18,12 +18,6 @@ export async function GET(
       return fail("주최자 링크가 올바르지 않습니다.", 403);
     }
 
-    const rounds = listRounds(id).map((round) => ({
-      ...round,
-      submissionCount: countSubmissions(round.id),
-      submissions: listSubmissions(round.id),
-    }));
-
     return ok({
       meeting: {
         id: meeting.id,
@@ -32,9 +26,10 @@ export async function GET(
         goal: meeting.goal,
         maxRounds: meeting.maxRounds,
         status: meeting.status,
+        decision: meeting.decision,
         createdAt: meeting.createdAt,
       },
-      rounds,
+      rounds: listRoundsWithSubmissions(id),
     });
   } catch (error) {
     return handleError(error);
