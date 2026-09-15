@@ -40,12 +40,10 @@ export default function DecisionEditor({
   }, [decidedAt]);
 
   return (
-    <section className="card p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">결론</h2>
-        <span
-          className={`chip ${decision ? "bg-stone-800 text-white" : "bg-amber-100 text-amber-800"}`}
-        >
+    <section className="card p-6 sm:p-7">
+      <div className="mb-5 flex items-baseline justify-between gap-4">
+        <h2 className="font-display text-xl font-semibold text-stone-900">결론</h2>
+        <span className={decision ? "status status-done" : "status status-wait"}>
           {decision ? "확정됨" : "결정 대기"}
         </span>
       </div>

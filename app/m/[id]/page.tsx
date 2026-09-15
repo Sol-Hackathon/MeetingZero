@@ -31,11 +31,11 @@ interface HostState {
   rounds: HostRound[];
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  draft: "준비 중",
-  collecting: "진행 중",
-  deciding: "결정 대기",
-  closed: "종료",
+const MEETING_STATUS: Record<string, { label: string; cls: string }> = {
+  draft: { label: "준비 중", cls: "status" },
+  collecting: { label: "답변 수집 중", cls: "status status-live" },
+  deciding: { label: "결정 대기", cls: "status status-wait" },
+  closed: { label: "종료", cls: "status status-done" },
 };
 
 export default function HostPage() {
@@ -107,54 +107,51 @@ function HostView() {
   if (!state) return <Centered>불러오는 중…</Centered>;
 
   const { meeting, rounds } = state;
+  const status = MEETING_STATUS[meeting.status] ?? { label: meeting.status, cls: "status" };
 
   return (
-    <main className="mx-auto max-w-3xl px-5 py-10">
-      <a href="/" className="text-sm text-stone-500 hover:text-stone-900">
-        ← 회의없는회의
-      </a>
-
-      <header className="mt-3">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-bold tracking-tight">{meeting.title}</h1>
-          <span
-            className={`chip mt-1 shrink-0 ${
-              meeting.status === "deciding"
-                ? "bg-amber-100 text-amber-800"
-                : "bg-stone-200 text-stone-700"
-            }`}
-          >
-            {STATUS_LABEL[meeting.status] ?? meeting.status}
-          </span>
+    <main className="mx-auto max-w-3xl px-5 pb-20 pt-10">
+      <header>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className={status.cls}>{status.label}</span>
+          <span className="eyebrow tabular-nums">{meeting.maxRounds}라운드 회의</span>
         </div>
+        <h1 className="mt-3 font-display text-3xl font-semibold leading-tight text-stone-900">
+          {meeting.title}
+        </h1>
         {meeting.goal && (
-          <p className="mt-1.5 text-sm text-stone-600">목표 · {meeting.goal}</p>
+          <p className="mt-3 text-[15px] leading-relaxed text-stone-600">
+            <span className="mr-2 text-[13px] font-medium text-stone-500">목표</span>
+            {meeting.goal}
+          </p>
         )}
         <details className="mt-3">
-          <summary className="cursor-pointer text-sm text-stone-500">배경 보기</summary>
-          <p className="mt-2 whitespace-pre-wrap rounded-lg bg-stone-100 p-3 text-sm leading-relaxed text-stone-700">
+          <summary className="cursor-pointer text-[13px] text-stone-500 hover:text-stone-900">
+            배경 보기
+          </summary>
+          <p className="mt-2 whitespace-pre-wrap border-l-2 border-stone-300 pl-4 text-[15px] leading-relaxed text-stone-700">
             {meeting.background}
           </p>
         </details>
         {rounds.some((round) => round.status === "closed") && (
-          <div className="mt-4">
+          <div className="mt-5">
             <ReportActions meetingId={meetingId} hostToken={hostToken} />
           </div>
         )}
       </header>
 
       {error && (
-        <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="mt-6 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       )}
       {notice && (
-        <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+        <p className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           {notice}
         </p>
       )}
 
-      <div className="mt-8 space-y-6">
+      <div className="mt-10 space-y-6">
         {rounds.map((round) => (
           <RoundCard
             key={round.id}
@@ -273,33 +270,35 @@ function RoundCard({
     return `${window.location.origin}/r/${meetingId}`;
   }, [meetingId]);
 
-  const statusChip =
+  const status =
     round.status === "draft"
-      ? { text: "검토 중", cls: "bg-stone-200 text-stone-700" }
+      ? { label: "검토 중", cls: "status" }
       : round.status === "open"
-        ? { text: "답변 수집 중", cls: "bg-blue-100 text-blue-800" }
-        : { text: "마감", cls: "bg-stone-800 text-white" };
+        ? { label: "답변 수집 중", cls: "status status-live" }
+        : { label: "마감", cls: "status status-done" };
 
   return (
-    <section className="card p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">
+    <section className="card p-6 sm:p-7">
+      <div className="mb-5 flex items-baseline justify-between gap-4">
+        <h2 className="font-display text-xl font-semibold text-stone-900">
           {round.roundNo}라운드
-          <span className="ml-1.5 text-sm font-normal text-stone-400">/ {totalRounds}</span>
+          <span className="ml-1.5 text-sm font-normal text-stone-400 tabular-nums">
+            / {totalRounds}
+          </span>
         </h2>
-        <span className={`chip ${statusChip.cls}`}>{statusChip.text}</span>
+        <span className={status.cls}>{status.label}</span>
       </div>
 
       {round.status === "draft" && (
         <>
-          <p className="mb-4 text-sm text-stone-600">
+          <p className="mb-5 text-[15px] leading-relaxed text-stone-600">
             AI가 만든 질문입니다. 빼거나 고친 뒤 공개하세요. 여기서 공개해야 참여자가 답할 수
             있습니다.
           </p>
 
           <label className="label">참여자 안내문</label>
           <textarea
-            className="input mb-4 mt-1.5 min-h-[72px] resize-y text-sm leading-relaxed"
+            className="input mb-5 mt-2 min-h-[72px] resize-y"
             value={intro}
             onChange={(e) => setIntro(e.target.value)}
             placeholder="참여자가 질문 위에서 먼저 읽을 안내문"
@@ -307,7 +306,7 @@ function RoundCard({
 
           <QuestionEditor questions={questions} onChange={setQuestions} />
 
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-6 flex flex-wrap gap-2">
             <button
               className="btn-primary"
               disabled={busy !== null}
@@ -331,24 +330,24 @@ function RoundCard({
           <ShareBox url={shareUrl} />
 
           {round.intro && (
-            <p className="mt-4 rounded-lg bg-stone-100 p-3 text-sm leading-relaxed text-stone-700">
+            <p className="mt-5 border-l-2 border-stone-300 pl-4 text-[15px] leading-relaxed text-stone-700">
               {round.intro}
             </p>
           )}
 
-          <ol className="mt-4 space-y-2">
+          <ol className="mt-5 space-y-2">
             {round.questions.map((question, index) => (
-              <li key={question.id} className="text-sm">
-                <span className="mr-1.5 text-stone-400">Q{index + 1}</span>
+              <li key={question.id} className="text-[15px] leading-relaxed">
+                <span className="mr-2 font-display text-stone-400 tabular-nums">Q{index + 1}</span>
                 <span className="text-stone-800">{question.text}</span>
-                <span className="ml-2 text-xs text-stone-400">{kindLabel(question.kind)}</span>
+                <span className="ml-2 text-xs text-stone-500">{kindLabel(question.kind)}</span>
               </li>
             ))}
           </ol>
 
-          <div className="mt-5 rounded-lg border border-stone-200 p-4">
-            <p className="text-sm font-medium">
-              답변 {round.submissionCount}명
+          <div className="mt-6 border-t border-stone-200 pt-4">
+            <p className="text-sm font-medium text-stone-900">
+              답변 <span className="tabular-nums">{round.submissionCount}</span>명
               {round.submissionCount === 0 && (
                 <span className="ml-2 font-normal text-stone-500">아직 응답이 없습니다</span>
               )}
@@ -369,7 +368,7 @@ function RoundCard({
           </div>
 
           <button
-            className="btn-primary mt-4"
+            className="btn-primary mt-5"
             disabled={busy !== null || round.submissionCount === 0}
             onClick={() => void onClose()}
           >
@@ -399,12 +398,12 @@ function RoundCard({
 function ShareBox({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-      <p className="text-sm font-medium text-blue-900">참여자에게 이 링크를 보내세요</p>
-      <p className="mt-0.5 text-xs text-blue-700">
+    <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4">
+      <p className="text-sm font-medium text-emerald-900">참여자에게 이 링크를 보내세요</p>
+      <p className="mt-0.5 text-[13px] leading-5 text-emerald-800">
         로그인 없이 바로 답변할 수 있습니다. 다음 라운드에도 같은 링크를 쓰면 됩니다.
       </p>
-      <div className="mt-2.5 flex gap-2">
+      <div className="mt-3 flex gap-2">
         <input readOnly className="input bg-white font-mono text-xs" value={url} />
         <button
           className="btn-ghost shrink-0"
@@ -428,11 +427,11 @@ function ShareBox({ url }: { url: string }) {
 function RawAnswers({ round }: { round: HostRound }) {
   if (round.submissions.length === 0) return null;
   return (
-    <details className="mt-5 rounded-lg border border-stone-200">
-      <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-stone-700">
+    <details className="mt-6 border-t border-stone-200 pt-4">
+      <summary className="cursor-pointer text-sm font-medium text-stone-700 hover:text-stone-900">
         원본 답변 {round.submissions.length}건 보기
       </summary>
-      <div className="space-y-5 border-t border-stone-200 px-4 py-4">
+      <div className="mt-4 space-y-5">
         {round.submissions.map((submission) => (
           <div key={submission.submissionId}>
             <p className="text-sm font-semibold text-stone-900">{submission.participantName}</p>
@@ -442,7 +441,7 @@ function RawAnswers({ round }: { round: HostRound }) {
                 return (
                   <div key={question.id}>
                     <dt className="text-xs text-stone-500">{question.text}</dt>
-                    <dd className="whitespace-pre-wrap text-sm text-stone-800">
+                    <dd className="whitespace-pre-wrap text-[15px] leading-relaxed text-stone-800">
                       {answer?.value || "(무응답)"}
                     </dd>
                   </div>
@@ -458,7 +457,7 @@ function RawAnswers({ round }: { round: HostRound }) {
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex min-h-screen items-center justify-center px-5 text-center text-stone-600">
+    <main className="flex min-h-[70vh] items-center justify-center px-5 text-center text-stone-600">
       {children}
     </main>
   );

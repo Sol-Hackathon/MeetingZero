@@ -94,7 +94,7 @@ function ReportView() {
 
       <article>
         <header>
-          <h1 className="text-2xl font-bold leading-tight text-stone-900 sm:text-3xl">
+          <h1 className="font-display text-3xl font-semibold leading-tight text-stone-900 sm:text-4xl">
             {meeting.title}
           </h1>
           <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[13px] leading-5 text-stone-700">
@@ -121,7 +121,9 @@ function ReportView() {
 
         {/* 결론: 문서에서 가장 눈에 띄어야 한다 */}
         <SectionTitle primary>결론</SectionTitle>
-        <p className="text-lg font-medium leading-snug text-stone-900">{oneLineSummary(data)}</p>
+        <p className="font-display text-xl font-medium leading-snug text-stone-900">
+          {oneLineSummary(data)}
+        </p>
         {decision ? (
           <DecisionDoc decision={decision} all={summary.participants} />
         ) : (
@@ -416,7 +418,7 @@ function AppendixRound({ round }: { round: ReportRound }) {
 function SectionTitle({ children, primary }: { children: React.ReactNode; primary?: boolean }) {
   return (
     <h2
-      className={`mb-4 break-after-avoid text-xl font-bold text-stone-900 ${
+      className={`mb-4 break-after-avoid font-display text-2xl font-semibold text-stone-900 ${
         primary ? "mt-10 border-t-2 border-stone-900 pt-4" : "mt-12 border-b border-stone-300 pb-2"
       }`}
     >

@@ -45,11 +45,13 @@ export default function QuestionEditor({ questions, onChange }: Props) {
   return (
     <div className="space-y-3">
       {questions.map((question, index) => (
-        <div key={index} className="rounded-lg border border-stone-200 bg-stone-50/60 p-4">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="chip bg-stone-200 text-stone-700">Q{index + 1}</span>
+        <div key={index} className="rounded-md border border-stone-200 bg-stone-50 p-4">
+          <div className="mb-3 flex items-center gap-3">
+            <span className="font-display text-base font-semibold text-stone-500 tabular-nums">
+              Q{index + 1}
+            </span>
             <select
-              className="rounded-md border border-stone-300 bg-white px-2 py-1 text-xs"
+              className="rounded-sm border border-stone-300 bg-white px-2 py-1 text-xs text-stone-800 outline-none focus:border-stone-900"
               value={question.kind}
               onChange={(e) => {
                 const kind = e.target.value as QuestionKind;
@@ -71,22 +73,32 @@ export default function QuestionEditor({ questions, onChange }: Props) {
             <label className="flex cursor-pointer items-center gap-1.5 text-xs text-stone-600">
               <input
                 type="checkbox"
-                className="accent-stone-900"
+                className="accent-emerald-600"
                 checked={question.required}
                 onChange={(e) => update(index, { required: e.target.checked })}
               />
               필수
             </label>
             <div className="ml-auto flex items-center gap-0.5">
-              <button type="button" className="btn-quiet" onClick={() => move(index, -1)}>
+              <button
+                type="button"
+                className="btn-quiet"
+                aria-label="위로"
+                onClick={() => move(index, -1)}
+              >
                 ↑
               </button>
-              <button type="button" className="btn-quiet" onClick={() => move(index, 1)}>
+              <button
+                type="button"
+                className="btn-quiet"
+                aria-label="아래로"
+                onClick={() => move(index, 1)}
+              >
                 ↓
               </button>
               <button
                 type="button"
-                className="btn-quiet hover:!bg-red-50 hover:!text-red-600"
+                className="btn-quiet hover:!bg-red-50 hover:!text-red-700"
                 onClick={() => remove(index)}
               >
                 삭제
@@ -95,7 +107,7 @@ export default function QuestionEditor({ questions, onChange }: Props) {
           </div>
 
           <textarea
-            className="input min-h-[64px] resize-y bg-white leading-relaxed"
+            className="input min-h-[64px] resize-y"
             placeholder="참여자에게 보여줄 질문"
             value={question.text}
             onChange={(e) => update(index, { text: e.target.value })}
@@ -105,11 +117,11 @@ export default function QuestionEditor({ questions, onChange }: Props) {
             <div className="mt-2 space-y-1.5">
               {question.options.map((option, optionIndex) => (
                 <div key={optionIndex} className="flex items-center gap-2">
-                  <span className="w-4 text-center text-xs text-stone-400">
+                  <span className="w-4 text-center text-xs text-stone-400 tabular-nums">
                     {optionIndex + 1}
                   </span>
                   <input
-                    className="input bg-white py-1.5 text-sm"
+                    className="input py-1.5 text-sm"
                     value={option}
                     placeholder="선택지"
                     onChange={(e) =>
@@ -123,6 +135,7 @@ export default function QuestionEditor({ questions, onChange }: Props) {
                   <button
                     type="button"
                     className="btn-quiet"
+                    aria-label="선택지 삭제"
                     onClick={() =>
                       update(index, {
                         options: question.options.filter((_, i) => i !== optionIndex),
@@ -144,9 +157,9 @@ export default function QuestionEditor({ questions, onChange }: Props) {
           )}
 
           <div className="mt-2 flex items-start gap-2">
-            <span className="mt-1.5 shrink-0 text-[11px] font-medium text-stone-400">의도</span>
+            <span className="mt-2 shrink-0 text-[11px] font-medium text-stone-500">의도</span>
             <input
-              className="input border-dashed bg-white py-1.5 text-xs text-stone-600"
+              className="input border-dashed py-1.5 text-xs text-stone-600"
               placeholder="이 질문으로 무엇을 확정하려는지 (참여자에게는 안 보입니다)"
               value={question.intent}
               onChange={(e) => update(index, { intent: e.target.value })}

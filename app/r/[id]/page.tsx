@@ -143,26 +143,24 @@ export default function ParticipantPage() {
   const submitted = data.state === "submitted" && !editing;
 
   return (
-    <main className="mx-auto max-w-2xl px-5 py-10">
+    <main className="mx-auto max-w-2xl px-5 pb-20 pt-10">
       <header>
-        <p className="text-xs font-medium tracking-wide text-stone-500">
-          {round.roundNo}라운드 / 총 {round.totalRounds}라운드
+        <p className="eyebrow tabular-nums">
+          {round.roundNo}라운드 <span className="text-stone-300">/</span> 총 {round.totalRounds}라운드
         </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight">{data.meeting.title}</h1>
+        <h1 className="mt-2 font-display text-3xl font-semibold leading-tight text-stone-900">
+          {data.meeting.title}
+        </h1>
       </header>
 
       {data.previous && (
-        <section className="mt-6 rounded-xl border border-stone-200 bg-stone-100/70 p-5">
-          <h2 className="text-sm font-semibold text-stone-900">
-            {data.previous.roundNo}라운드에서 이렇게 정리되었습니다
-          </h2>
-          <p className="mt-2 text-sm leading-relaxed text-stone-700">
-            {data.previous.overview}
-          </p>
+        <section className="card mt-8 p-5 sm:p-6">
+          <h2 className="eyebrow">{data.previous.roundNo}라운드에서 이렇게 정리되었습니다</h2>
+          <p className="mt-2 text-[15px] leading-relaxed text-stone-800">{data.previous.overview}</p>
           {data.previous.consensus.length > 0 && (
-            <div className="mt-3">
+            <div className="mt-4 border-l-[3px] border-emerald-500 pl-3">
               <p className="text-xs font-medium text-stone-500">이미 합의된 것</p>
-              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-sm text-stone-700">
+              <ul className="mt-1 space-y-1 text-[15px] leading-relaxed text-stone-800">
                 {data.previous.consensus.map((item, index) => (
                   <li key={index}>{item}</li>
                 ))}
@@ -170,9 +168,9 @@ export default function ParticipantPage() {
             </div>
           )}
           {data.previous.unresolved.length > 0 && (
-            <div className="mt-3">
-              <p className="text-xs font-medium text-stone-500">아직 남은 것 — 아래에서 여쭙습니다</p>
-              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-sm text-stone-700">
+            <div className="mt-4 border-l-[3px] border-amber-500 pl-3">
+              <p className="text-xs font-medium text-stone-500">아직 남은 것. 아래에서 여쭙습니다</p>
+              <ul className="mt-1 space-y-1 text-[15px] leading-relaxed text-stone-800">
                 {data.previous.unresolved.map((item, index) => (
                   <li key={index}>{item}</li>
                 ))}
@@ -183,31 +181,31 @@ export default function ParticipantPage() {
       )}
 
       {round.intro && (
-        <p className="mt-6 whitespace-pre-wrap text-[15px] leading-relaxed text-stone-700">
+        <p className="mt-8 whitespace-pre-wrap text-[16px] leading-relaxed text-stone-700">
           {round.intro}
         </p>
       )}
 
       {submitted ? (
-        <section className="card mt-6 p-6 text-center">
-          <p className="text-lg font-semibold">답변이 저장되었습니다</p>
-          <p className="mt-1.5 text-sm text-stone-600">
+        <section className="card mt-8 p-8 text-center">
+          <p className="font-display text-2xl font-semibold text-stone-900">답변이 저장되었습니다</p>
+          <p className="mt-2 text-[15px] leading-relaxed text-stone-600">
             다른 분들의 답변이 모이면 주최자가 정리합니다. 다음 라운드 질문이 열리면 같은 링크로
             들어오세요.
           </p>
-          <button className="btn-ghost mt-4" onClick={() => setEditing(true)}>
+          <button className="btn-ghost mt-5" onClick={() => setEditing(true)}>
             답변 수정하기
           </button>
         </section>
       ) : (
-        <form onSubmit={submit} className="mt-6 space-y-5">
-          <div className="card p-5">
+        <form onSubmit={submit} className="mt-8 space-y-5">
+          <div className="card p-5 sm:p-6">
             <label className="label" htmlFor="name">
               이름 또는 닉네임
             </label>
             <input
               id="name"
-              className="input mt-1.5"
+              className="input mt-2"
               placeholder="예: 김지민 / 개발팀 A"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -216,9 +214,10 @@ export default function ParticipantPage() {
           </div>
 
           {round.questions.map((question, index) => (
-            <div key={question.id} className="card p-5">
-              <p className="text-[15px] font-medium leading-relaxed text-stone-900">
-                <span className="mr-1.5 text-stone-400">Q{index + 1}</span>
+            <fieldset key={question.id} className="card p-5 sm:p-6">
+              <legend className="sr-only">질문 {index + 1}</legend>
+              <p className="text-[16px] font-medium leading-relaxed text-stone-900">
+                <span className="mr-2 font-display text-stone-400 tabular-nums">Q{index + 1}</span>
                 {question.text}
                 {!question.required && (
                   <span className="ml-1.5 text-xs font-normal text-stone-400">(선택)</span>
@@ -227,7 +226,7 @@ export default function ParticipantPage() {
 
               {question.kind === "open" && (
                 <textarea
-                  className="input mt-3 min-h-[110px] resize-y leading-relaxed"
+                  className="input mt-4 min-h-[120px] resize-y"
                   placeholder="자유롭게 적어주세요."
                   value={answers[question.id] ?? ""}
                   onChange={(e) =>
@@ -237,71 +236,82 @@ export default function ParticipantPage() {
               )}
 
               {question.kind === "choice" && (
-                <div className="mt-3 space-y-1.5">
-                  {question.options.map((option, optionIndex) => (
-                    <label
-                      key={optionIndex}
-                      className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm transition ${
-                        answers[question.id] === option
-                          ? "border-stone-900 bg-stone-900 text-white"
-                          : "border-stone-300 hover:bg-stone-50"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        className="sr-only"
-                        name={`q-${question.id}`}
-                        value={option}
-                        checked={answers[question.id] === option}
-                        onChange={() =>
-                          setAnswers((prev) => ({ ...prev, [question.id]: option }))
-                        }
-                      />
-                      {option}
-                    </label>
-                  ))}
+                <div className="mt-4 space-y-2">
+                  {question.options.map((option, optionIndex) => {
+                    const on = answers[question.id] === option;
+                    return (
+                      <label
+                        key={optionIndex}
+                        className={`flex cursor-pointer items-center gap-3 rounded-md border px-3.5 py-2.5 text-[15px] transition-colors duration-150 ${
+                          on
+                            ? "border-stone-900 bg-stone-900 text-stone-50"
+                            : "border-stone-300 bg-white hover:border-stone-400 hover:bg-stone-100"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          className="sr-only"
+                          name={`q-${question.id}`}
+                          value={option}
+                          checked={on}
+                          onChange={() =>
+                            setAnswers((prev) => ({ ...prev, [question.id]: option }))
+                          }
+                        />
+                        <span
+                          className={`h-3.5 w-3.5 shrink-0 rounded-full border-2 ${
+                            on ? "border-stone-50 bg-emerald-400" : "border-stone-300"
+                          }`}
+                        />
+                        {option}
+                      </label>
+                    );
+                  })}
                 </div>
               )}
 
               {question.kind === "scale" && (
-                <div className="mt-3">
-                  <div className="flex gap-2">
-                    {[1, 2, 3, 4, 5].map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() =>
-                          setAnswers((prev) => ({ ...prev, [question.id]: String(value) }))
-                        }
-                        className={`h-11 flex-1 rounded-lg border text-sm font-medium transition ${
-                          answers[question.id] === String(value)
-                            ? "border-stone-900 bg-stone-900 text-white"
-                            : "border-stone-300 hover:bg-stone-50"
-                        }`}
-                      >
-                        {value}
-                      </button>
-                    ))}
+                <div className="mt-4">
+                  <div className="grid grid-cols-5 gap-2">
+                    {[1, 2, 3, 4, 5].map((value) => {
+                      const on = answers[question.id] === String(value);
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() =>
+                            setAnswers((prev) => ({ ...prev, [question.id]: String(value) }))
+                          }
+                          className={`h-11 rounded-md border text-[15px] font-medium tabular-nums transition-colors duration-150 ${
+                            on
+                              ? "border-stone-900 bg-stone-900 text-stone-50"
+                              : "border-stone-300 bg-white hover:border-stone-400 hover:bg-stone-100"
+                          }`}
+                        >
+                          {value}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="mt-1 flex justify-between text-xs text-stone-400">
+                  <div className="mt-1.5 flex justify-between text-xs text-stone-500">
                     <span>1 · 매우 낮음</span>
                     <span>5 · 매우 높음</span>
                   </div>
                 </div>
               )}
-            </div>
+            </fieldset>
           ))}
 
           {error && (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}
             </p>
           )}
 
-          <button type="submit" className="btn-primary w-full py-3" disabled={submitting}>
+          <button type="submit" className="btn-primary w-full py-3 text-[15px]" disabled={submitting}>
             {submitting ? "제출 중…" : "답변 제출"}
           </button>
-          <p className="pb-6 text-center text-xs text-stone-400">
+          <p className="pb-6 text-center text-xs text-stone-500">
             제출 후에도 이 링크에서 수정할 수 있습니다.
           </p>
         </form>
@@ -312,9 +322,13 @@ export default function ParticipantPage() {
 
 function Shell({ title, children }: { title?: string; children: React.ReactNode }) {
   return (
-    <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-5 text-center">
-      {title && <h1 className="mb-3 text-xl font-bold">{title}</h1>}
-      <div className="text-stone-700">{children}</div>
+    <main className="mx-auto flex min-h-[70vh] max-w-lg flex-col justify-center px-5 text-center">
+      {title && (
+        <h1 className="mb-4 font-display text-2xl font-semibold leading-tight text-stone-900">
+          {title}
+        </h1>
+      )}
+      <div className="text-[15px] leading-relaxed text-stone-700">{children}</div>
     </main>
   );
 }
