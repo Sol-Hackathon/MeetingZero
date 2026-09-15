@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 토큰(색 · 서체 · 반경)은 tailwind.config.ts, 규칙은 DESIGN.md */
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
@@ -12,35 +14,65 @@
   * {
     word-break: keep-all;
   }
+  ::selection {
+    @apply bg-emerald-100 text-stone-900;
+  }
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible {
+    @apply rounded-sm outline-none ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-stone-50;
+  }
 }
 
 @layer components {
   .card {
-    @apply rounded-xl border border-stone-200 bg-white shadow-sm;
+    @apply rounded-lg border border-stone-200 bg-white;
   }
   .label {
-    @apply block text-sm font-medium text-stone-700;
+    @apply block text-[13px] font-medium text-stone-700;
   }
   .input {
-    @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-[15px]
-           outline-none transition placeholder:text-stone-400
-           focus:border-stone-900 focus:ring-1 focus:ring-stone-900;
+    @apply w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-[15px] leading-relaxed
+           outline-none transition-colors duration-150 placeholder:text-stone-400
+           focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2
-           text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-4 py-2
+           text-sm font-medium transition-colors duration-150
+           disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-stone-900 text-white hover:bg-stone-700;
+    @apply btn bg-stone-900 text-stone-50 hover:bg-stone-700;
   }
   .btn-ghost {
-    @apply btn border border-stone-300 bg-white text-stone-700 hover:bg-stone-100;
+    @apply btn border border-stone-300 bg-white text-stone-800 hover:border-stone-400 hover:bg-stone-100;
   }
   .btn-quiet {
-    @apply btn px-2 py-1 text-xs text-stone-500 hover:bg-stone-100 hover:text-stone-800;
+    @apply btn px-2 py-1 text-xs text-stone-500 hover:bg-stone-100 hover:text-stone-900;
   }
   .chip {
-    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center rounded-sm px-1.5 py-0.5 text-xs font-medium;
+  }
+  /* 작은 안내 라벨: 라운드 표시, 섹션 눈썹 */
+  .eyebrow {
+    @apply text-xs font-medium tracking-wide text-stone-500;
+  }
+  /* 상태 표시: 색 점 + 글자. 칩 대신 쓴다 */
+  .status {
+    @apply inline-flex items-center gap-1.5 text-xs font-medium text-stone-600;
+  }
+  .status::before {
+    content: "";
+    @apply h-1.5 w-1.5 rounded-full bg-stone-400;
+  }
+  .status-live::before {
+    @apply bg-emerald-500;
+  }
+  .status-wait::before {
+    @apply bg-amber-500;
+  }
+  .status-done::before {
+    @apply bg-stone-900;
   }
 }
 
