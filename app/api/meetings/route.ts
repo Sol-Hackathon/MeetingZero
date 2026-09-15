@@ -1,5 +1,5 @@
 import { createMeeting, createRound } from "@/lib/db";
-import { generateInitialQuestions } from "@/lib/ai";
+import { activeProvider, generateInitialQuestions } from "@/lib/ai";
 import { fail, handleError, ok } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -36,6 +36,8 @@ export async function POST(request: Request) {
       meetingId: meeting.id,
       hostToken: meeting.hostToken,
       hostNote: plan.hostNote,
+      /** 어떤 모델이 질문을 만들었는지 (디버깅·seed 로그용) */
+      provider: activeProvider(),
       round,
     });
   } catch (error) {

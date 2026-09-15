@@ -223,6 +223,7 @@ try {
   );
   meetingId = created.meetingId;
   hostToken = created.hostToken;
+  if (created.provider) log(`   모델: ${created.provider}`);
   const t = encodeURIComponent(hostToken);
 
   let roundNo = 1;
