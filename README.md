@@ -186,6 +186,8 @@ samples/
 - **출력 형식**은 zod 스키마로 강제합니다. Gemini 는 `responseJsonSchema`, Claude 는
   structured outputs 를 쓰고, 받은 뒤 zod 로 한 번 더 검증해서 형식이 어긋나면 사용자에게
   안내 메시지를 띄웁니다.
+- **디자인**: 서체·색·간격의 기준은 [DESIGN.md](DESIGN.md) 에 있습니다. 토큰은 `tailwind.config.ts`,
+  공용 클래스는 `app/globals.css`. 화면을 고칠 때 먼저 읽습니다.
 - **DB**: Node 24 내장 `node:sqlite`. 별도 설치나 네이티브 빌드가 필요 없고 파일은 `data/meetingless.db`
   에 생깁니다. 지우면 초기화됩니다.
 
