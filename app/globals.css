@@ -45,11 +45,16 @@
 }
 
 @page {
-  margin: 16mm;
+  margin: 20mm 18mm;
 }
 
 @media print {
   body {
     background: white;
+  }
+  /* 리포트의 의미색 테두리(정해진 것 · 모여서 정할 것)가 종이에서도 보이게 */
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 }
