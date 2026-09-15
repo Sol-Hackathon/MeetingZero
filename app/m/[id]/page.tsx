@@ -4,7 +4,9 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import QuestionEditor, { kindLabel } from "@/app/components/QuestionEditor";
 import DigestView from "@/app/components/DigestView";
-import type { DraftQuestion, Question, Round } from "@/lib/types";
+import DecisionEditor from "@/app/components/DecisionEditor";
+import ReportActions from "@/app/components/ReportActions";
+import type { Decision, DraftQuestion, Question, Round } from "@/lib/types";
 
 interface SubmissionView {
   submissionId: number;
@@ -23,10 +25,18 @@ interface HostState {
     goal: string;
     maxRounds: number;
     status: string;
+    decision: Decision | null;
     createdAt: string;
   };
   rounds: HostRound[];
 }
+
+const STATUS_LABEL: Record<string, string> = {
+  draft: "준비 중",
+  collecting: "진행 중",
+  deciding: "결정 대기",
+  closed: "종료",
+};
 
 export default function HostPage() {
   return (
@@ -107,12 +117,14 @@ function HostView() {
       <header className="mt-3">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-2xl font-bold tracking-tight">{meeting.title}</h1>
-          <span className="chip mt-1 shrink-0 bg-stone-200 text-stone-700">
-            {meeting.status === "closed"
-              ? "종료"
-              : meeting.status === "collecting"
-                ? "진행 중"
-                : "준비 중"}
+          <span
+            className={`chip mt-1 shrink-0 ${
+              meeting.status === "deciding"
+                ? "bg-amber-100 text-amber-800"
+                : "bg-stone-200 text-stone-700"
+            }`}
+          >
+            {STATUS_LABEL[meeting.status] ?? meeting.status}
           </span>
         </div>
         {meeting.goal && (
@@ -124,6 +136,11 @@ function HostView() {
             {meeting.background}
           </p>
         </details>
+        {rounds.some((round) => round.status === "closed") && (
+          <div className="mt-4">
+            <ReportActions meetingId={meetingId} hostToken={hostToken} />
+          </div>
+        )}
       </header>
 
       {error && (
@@ -187,7 +204,7 @@ function HostView() {
                   setNotice(
                     data.nextRoundNo
                       ? `의견을 정리하고 ${data.nextRoundNo}라운드 질문을 만들었습니다. 검토 후 공개하세요.`
-                      : `회의를 마쳤습니다. ${data.finishedReason ?? ""}`,
+                      : `답변 정리를 마쳤습니다. ${data.finishedReason ?? ""}`,
                   );
                 }
                 return data;
@@ -196,6 +213,27 @@ function HostView() {
           />
         ))}
       </div>
+
+      {(meeting.status === "deciding" || meeting.status === "closed") && (
+        <div className="mt-6">
+          <DecisionEditor
+            decision={meeting.decision}
+            lastDigest={rounds.filter((round) => round.digest).at(-1)?.digest ?? null}
+            participantNames={Array.from(
+              new Set(rounds.flatMap((round) => round.submissions.map((s) => s.participantName))),
+            )}
+            busy={busy === "decide"}
+            onSave={(input) =>
+              call("/decide", { method: "POST", body: JSON.stringify(input) }, "decide").then(
+                (data) => {
+                  if (data) setNotice("결론을 확정했습니다. 리포트는 위쪽 버튼으로 볼 수 있습니다.");
+                  return data;
+                },
+              )
+            }
+          />
+        </div>
+      )}
     </main>
   );
 }

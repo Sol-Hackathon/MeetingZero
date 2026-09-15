@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { shortId, secretToken } from "./ids";
 import type {
+  Decision,
   DraftQuestion,
   Meeting,
   Question,
@@ -18,14 +19,15 @@ PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS meetings (
-  id          TEXT PRIMARY KEY,
-  host_token  TEXT NOT NULL,
-  title       TEXT NOT NULL,
-  background  TEXT NOT NULL,
-  goal        TEXT NOT NULL DEFAULT '',
-  max_rounds  INTEGER NOT NULL DEFAULT 2,
-  status      TEXT NOT NULL DEFAULT 'draft',
-  created_at  TEXT NOT NULL
+  id            TEXT PRIMARY KEY,
+  host_token    TEXT NOT NULL,
+  title         TEXT NOT NULL,
+  background    TEXT NOT NULL,
+  goal          TEXT NOT NULL DEFAULT '',
+  max_rounds    INTEGER NOT NULL DEFAULT 2,
+  status        TEXT NOT NULL DEFAULT 'draft',
+  decision_json TEXT,
+  created_at    TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS rounds (
@@ -82,6 +84,14 @@ CREATE INDEX IF NOT EXISTS idx_submissions_round ON submissions(round_id);
 CREATE INDEX IF NOT EXISTS idx_answers_submission ON answers(submission_id);
 `;
 
+/**
+ * 처음 만든 뒤에 추가된 컬럼. CREATE TABLE IF NOT EXISTS 는 이미 있는 테이블을 건드리지
+ * 않으므로, 기존 DB 파일에는 서버가 뜰 때 없는 컬럼만 골라서 붙인다.
+ */
+const ADDED_COLUMNS: { table: string; column: string; definition: string }[] = [
+  { table: "meetings", column: "decision_json", definition: "TEXT" },
+];
+
 // dev 서버가 hot reload 될 때마다 커넥션이 새로 열리는 것을 막는다.
 const globalForDb = globalThis as unknown as { __meetinglessDb?: DatabaseSync };
 
@@ -90,9 +100,31 @@ function getDb(): DatabaseSync {
     mkdirSync(path.dirname(DB_PATH), { recursive: true });
     const db = new DatabaseSync(DB_PATH);
     db.exec(SCHEMA);
+    for (const { table, column, definition } of ADDED_COLUMNS) {
+      ensureColumn(db, table, column, definition);
+    }
     globalForDb.__meetinglessDb = db;
   }
   return globalForDb.__meetinglessDb;
+}
+
+function ensureColumn(db: DatabaseSync, table: string, column: string, definition: string): void {
+  const columns = db.prepare(`SELECT name FROM pragma_table_info(?)`).all(table) as Row[];
+  if (columns.some((c) => c.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
+/** 여러 쓰기를 하나로 묶는다. 중간에 실패하면 전부 되돌린다. */
+function transaction<T>(db: DatabaseSync, fn: () => T): T {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = fn();
+    db.exec("COMMIT");
+    return result;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 const now = () => new Date().toISOString();
@@ -112,6 +144,7 @@ function toMeeting(row: Row): Meeting {
     goal: String(row.goal ?? ""),
     maxRounds: Number(row.max_rounds),
     status: String(row.status) as Meeting["status"],
+    decision: row.decision_json ? (JSON.parse(String(row.decision_json)) as Decision) : null,
     createdAt: String(row.created_at),
   };
 }
@@ -162,6 +195,7 @@ export function createMeeting(input: {
     goal: input.goal,
     maxRounds: input.maxRounds,
     status: "draft",
+    decision: null,
     createdAt: now(),
   };
   db.prepare(
@@ -189,29 +223,40 @@ export function setMeetingStatus(id: string, status: Meeting["status"]): void {
   getDb().prepare(`UPDATE meetings SET status = ? WHERE id = ?`).run(status, id);
 }
 
+/** 주최자가 결론을 확정한다. 회의는 closed 가 된다. */
+export function saveDecision(meetingId: string, decision: Decision): void {
+  getDb()
+    .prepare(`UPDATE meetings SET decision_json = ?, status = 'closed' WHERE id = ?`)
+    .run(JSON.stringify(decision), meetingId);
+}
+
 /* ------------------------------------------------------------------ */
 /* rounds                                                              */
 /* ------------------------------------------------------------------ */
 
-export function createRound(input: {
+interface NewRound {
   meetingId: string;
   roundNo: number;
   intro: string;
   questions: DraftQuestion[];
-}): Round {
+}
+
+/** 트랜잭션 안에서만 부른다. */
+function insertRound(db: DatabaseSync, input: NewRound): number {
+  const result = db
+    .prepare(
+      `INSERT INTO rounds (meeting_id, round_no, status, intro, created_at)
+       VALUES (?, ?, 'draft', ?, ?)`,
+    )
+    .run(input.meetingId, input.roundNo, input.intro, now());
+  const roundId = Number(result.lastInsertRowid);
+  insertQuestions(db, roundId, input.questions);
+  return roundId;
+}
+
+export function createRound(input: NewRound): Round {
   const db = getDb();
-  db.prepare(
-    `INSERT INTO rounds (meeting_id, round_no, status, intro, created_at)
-     VALUES (?, ?, 'draft', ?, ?)`,
-  ).run(input.meetingId, input.roundNo, input.intro, now());
-  const roundId = Number(
-    (
-      db
-        .prepare(`SELECT id FROM rounds WHERE meeting_id = ? AND round_no = ?`)
-        .get(input.meetingId, input.roundNo) as Row
-    ).id,
-  );
-  replaceQuestions(roundId, input.questions);
+  const roundId = transaction(db, () => insertRound(db, input));
   return getRoundById(roundId)!;
 }
 
@@ -252,17 +297,42 @@ export function getOpenRound(meetingId: string): Round | null {
   return toRound(row, listQuestions(Number(row.id)));
 }
 
-export function setRoundStatus(roundId: number, status: RoundStatus, digest?: RoundDigest): void {
+/** 검토가 끝난 라운드를 참여자에게 연다. */
+export function openRound(roundId: number): void {
+  getDb()
+    .prepare(`UPDATE rounds SET status = 'open', opened_at = ? WHERE id = ?`)
+    .run(now(), roundId);
+}
+
+/**
+ * 라운드를 마감한다. 정리 결과 저장, 다음 라운드 생성(있으면) 또는 회의를 결론 대기로 전환을
+ * 트랜잭션 하나로 묶는다. 중간에 실패하면 아무것도 바뀌지 않는다.
+ * 이미 닫힌 라운드면 예외를 던진다 (같은 라운드를 동시에 두 번 마감한 경우).
+ */
+export function finishRound(input: {
+  roundId: number;
+  meetingId: string;
+  digest: RoundDigest;
+  next: { roundNo: number; intro: string; questions: DraftQuestion[] } | null;
+}): { nextRound: Round | null } {
   const db = getDb();
-  if (status === "open") {
-    db.prepare(`UPDATE rounds SET status = 'open', opened_at = ? WHERE id = ?`).run(now(), roundId);
-  } else if (status === "closed") {
-    db.prepare(
-      `UPDATE rounds SET status = 'closed', closed_at = ?, digest_json = ? WHERE id = ?`,
-    ).run(now(), digest ? JSON.stringify(digest) : null, roundId);
-  } else {
-    db.prepare(`UPDATE rounds SET status = ? WHERE id = ?`).run(status, roundId);
-  }
+  const nextRoundId = transaction(db, () => {
+    const result = db
+      .prepare(
+        `UPDATE rounds SET status = 'closed', closed_at = ?, digest_json = ?
+         WHERE id = ? AND status = 'open'`,
+      )
+      .run(now(), JSON.stringify(input.digest), input.roundId);
+    if (Number(result.changes) === 0) {
+      throw new Error("진행 중인 라운드가 아닙니다. 이미 마감됐을 수 있습니다.");
+    }
+    if (input.next) {
+      return insertRound(db, { meetingId: input.meetingId, ...input.next });
+    }
+    db.prepare(`UPDATE meetings SET status = 'deciding' WHERE id = ?`).run(input.meetingId);
+    return null;
+  });
+  return { nextRound: nextRoundId === null ? null : getRoundById(nextRoundId) };
 }
 
 export function updateRoundIntro(roundId: number, intro: string): void {
@@ -280,32 +350,32 @@ export function listQuestions(roundId: number): Question[] {
   return rows.map(toQuestion);
 }
 
+/** 트랜잭션 안에서만 부른다. */
+function insertQuestions(db: DatabaseSync, roundId: number, questions: DraftQuestion[]): void {
+  const insert = db.prepare(
+    `INSERT INTO questions (round_id, order_no, text, intent, kind, options_json, required)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  );
+  questions.forEach((q, index) => {
+    insert.run(
+      roundId,
+      index,
+      q.text,
+      q.intent ?? "",
+      q.kind ?? "open",
+      q.options?.length ? JSON.stringify(q.options) : null,
+      q.required === false ? 0 : 1,
+    );
+  });
+}
+
 /** 주최자가 검토·수정한 질문 목록으로 통째로 교체한다. */
 export function replaceQuestions(roundId: number, questions: DraftQuestion[]): Question[] {
   const db = getDb();
-  db.exec("BEGIN");
-  try {
+  transaction(db, () => {
     db.prepare(`DELETE FROM questions WHERE round_id = ?`).run(roundId);
-    const insert = db.prepare(
-      `INSERT INTO questions (round_id, order_no, text, intent, kind, options_json, required)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    );
-    questions.forEach((q, index) => {
-      insert.run(
-        roundId,
-        index,
-        q.text,
-        q.intent ?? "",
-        q.kind ?? "open",
-        q.options?.length ? JSON.stringify(q.options) : null,
-        q.required === false ? 0 : 1,
-      );
-    });
-    db.exec("COMMIT");
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
-  }
+    insertQuestions(db, roundId, questions);
+  });
   return listQuestions(roundId);
 }
 
@@ -322,12 +392,10 @@ export function upsertParticipant(meetingId: string, token: string, name: string
     db.prepare(`UPDATE participants SET name = ? WHERE id = ?`).run(name, Number(existing.id));
     return Number(existing.id);
   }
-  db.prepare(`INSERT INTO participants (meeting_id, token, name) VALUES (?, ?, ?)`).run(
-    meetingId,
-    token,
-    name,
-  );
-  return Number((db.prepare(`SELECT last_insert_rowid() AS id`).get() as Row).id);
+  const result = db
+    .prepare(`INSERT INTO participants (meeting_id, token, name) VALUES (?, ?, ?)`)
+    .run(meetingId, token, name);
+  return Number(result.lastInsertRowid);
 }
 
 export function saveSubmission(input: {
@@ -336,8 +404,7 @@ export function saveSubmission(input: {
   answers: { questionId: number; value: string }[];
 }): void {
   const db = getDb();
-  db.exec("BEGIN");
-  try {
+  transaction(db, () => {
     db.prepare(
       `INSERT INTO submissions (round_id, participant_id, submitted_at) VALUES (?, ?, ?)
        ON CONFLICT (round_id, participant_id) DO UPDATE SET submitted_at = excluded.submitted_at`,
@@ -356,11 +423,7 @@ export function saveSubmission(input: {
     for (const answer of input.answers) {
       insert.run(submissionId, answer.questionId, answer.value);
     }
-    db.exec("COMMIT");
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
-  }
+  });
 }
 
 export interface SubmissionView {
@@ -391,6 +454,19 @@ export function listSubmissions(roundId: number): SubmissionView[] {
       value: String(a.value),
     })),
   }));
+}
+
+export type RoundWithSubmissions = Round & {
+  submissionCount: number;
+  submissions: SubmissionView[];
+};
+
+/** 주최자 화면과 리포트가 쓰는 형태: 라운드마다 답변까지 붙인다. */
+export function listRoundsWithSubmissions(meetingId: string): RoundWithSubmissions[] {
+  return listRounds(meetingId).map((round) => {
+    const submissions = listSubmissions(round.id);
+    return { ...round, submissionCount: submissions.length, submissions };
+  });
 }
 
 export function countSubmissions(roundId: number): number {

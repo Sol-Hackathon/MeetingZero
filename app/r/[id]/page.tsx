@@ -116,10 +116,17 @@ export default function ParticipantPage() {
   if (!data) return <Shell>불러오는 중…</Shell>;
 
   if (data.state === "waiting") {
+    const deciding = data.meeting.status === "deciding";
     return (
       <Shell title={data.meeting.title}>
-        <p>아직 질문이 열리지 않았습니다. 주최자가 질문을 검토하고 있어요.</p>
-        <p className="mt-2 text-sm text-stone-500">잠시 후 이 링크를 다시 열어주세요.</p>
+        <p>
+          {deciding
+            ? "답변이 모두 모였습니다. 주최자가 결론을 정리하고 있어요."
+            : "아직 질문이 열리지 않았습니다. 주최자가 질문을 검토하고 있어요."}
+        </p>
+        <p className="mt-2 text-sm text-stone-500">
+          {deciding ? "정리가 끝나면 주최자가 결과를 공유할 거예요." : "잠시 후 이 링크를 다시 열어주세요."}
+        </p>
       </Shell>
     );
   }

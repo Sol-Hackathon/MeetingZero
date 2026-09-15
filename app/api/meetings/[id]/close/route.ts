@@ -1,12 +1,4 @@
-import {
-  createRound,
-  getMeeting,
-  getRound,
-  listRounds,
-  listSubmissions,
-  setMeetingStatus,
-  setRoundStatus,
-} from "@/lib/db";
+import { finishRound, getMeeting, getRound, listRounds, listSubmissions } from "@/lib/db";
 import { synthesizeAndFollowUp } from "@/lib/ai";
 import { fail, handleError, ok } from "@/lib/api";
 import type { RoundDigest } from "@/lib/types";
@@ -15,9 +7,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+/** 지금 정리 중인 라운드. 같은 라운드를 동시에 두 번 마감해 AI 를 두 번 부르는 것을 막는다 (인스턴스 1개 전제). */
+const closing = new Set<number>();
+
 /**
  * 라운드를 마감하고 답변을 정리한다.
- * 마지막 라운드가 아니고 아직 남은 쟁점이 있으면 다음 라운드 질문을 초안으로 만든다.
+ * 마지막 라운드가 아니고 아직 남은 쟁점이 있으면 다음 라운드 질문을 초안으로 만들고,
+ * 아니면 회의를 결론 대기(deciding) 상태로 넘긴다.
  */
 export async function POST(
   request: Request,
@@ -34,6 +30,9 @@ export async function POST(
     const round = getRound(id, Number(body.roundNo));
     if (!round) return fail("해당 라운드를 찾을 수 없습니다.", 404);
     if (round.status !== "open") return fail("진행 중인 라운드가 아닙니다.");
+    if (closing.has(round.id)) {
+      return fail("이미 정리하는 중입니다. 잠시 후 새로고침해 주세요.", 409);
+    }
 
     const submissions = listSubmissions(round.id);
     if (submissions.length === 0) {
@@ -46,42 +45,50 @@ export async function POST(
 
     const isFinalRound = round.roundNo >= meeting.maxRounds;
 
-    const plan = await synthesizeAndFollowUp({
-      meeting,
-      roundNo: round.roundNo,
-      questions: round.questions,
-      submissions,
-      previousDigests,
-      isFinalRound,
-    });
-
-    setRoundStatus(round.id, "closed", plan.digest);
-
-    let nextRoundNo: number | null = null;
-    if (!isFinalRound && plan.questions.length > 0) {
-      const next = createRound({
-        meetingId: id,
-        roundNo: round.roundNo + 1,
-        intro: plan.intro,
-        questions: plan.questions,
+    closing.add(round.id);
+    try {
+      const plan = await synthesizeAndFollowUp({
+        meeting,
+        roundNo: round.roundNo,
+        questions: round.questions,
+        submissions,
+        previousDigests,
+        isFinalRound,
       });
-      nextRoundNo = next.roundNo;
-    } else {
-      setMeetingStatus(id, "closed");
-    }
 
-    return ok({
-      digest: plan.digest,
-      hostNote: plan.hostNote,
-      nextRoundNo,
-      /** 다음 라운드가 만들어지지 않은 이유 */
-      finishedReason: nextRoundNo
-        ? null
-        : isFinalRound
-          ? "정해둔 마지막 라운드까지 진행했습니다."
-          : "AI 판단상 더 물어볼 것이 남지 않았습니다.",
-      rounds: listRounds(id),
-    });
+      const hasNext = !isFinalRound && plan.questions.length > 0;
+      let nextRoundNo: number | null = null;
+      try {
+        const { nextRound } = finishRound({
+          roundId: round.id,
+          meetingId: id,
+          digest: plan.digest,
+          next: hasNext
+            ? { roundNo: round.roundNo + 1, intro: plan.intro, questions: plan.questions }
+            : null,
+        });
+        nextRoundNo = nextRound?.roundNo ?? null;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return fail(`마감을 저장하지 못했습니다: ${message}`, 409);
+      }
+
+      return ok({
+        digest: plan.digest,
+        hostNote: plan.hostNote,
+        nextRoundNo,
+        meetingStatus: nextRoundNo ? "collecting" : "deciding",
+        /** 다음 라운드가 만들어지지 않은 이유 */
+        finishedReason: nextRoundNo
+          ? null
+          : isFinalRound
+            ? "정해둔 마지막 라운드까지 진행했습니다. 결론을 확정해 주세요."
+            : "AI 판단상 더 물어볼 것이 남지 않았습니다. 결론을 확정해 주세요.",
+        rounds: listRounds(id),
+      });
+    } finally {
+      closing.delete(round.id);
+    }
   } catch (error) {
     return handleError(error);
   }
