@@ -8,20 +8,30 @@ export function emptyDecision(): DecisionInput {
 }
 
 /**
- * 마지막 라운드의 정리 결과로 결론 초안을 만든다. AI 호출 없음.
- * 합의된 것 → 정해진 것, 갈린 것과 미해결 → 모여서 정할 것.
+ * 라운드 정리 결과들로 결론 초안을 만든다. AI 호출 없음.
+ * 정해진 것은 모든 라운드의 합의를 모은다. 앞 라운드에서 합의된 것은 뒤 라운드 정리에 다시 나오지 않기 때문.
+ * 모여서 정할 것은 마지막 라운드의 갈린 것과 미해결에서 가져온다.
  */
-export function draftDecision(digest: RoundDigest | null): DecisionInput {
-  if (!digest) return emptyDecision();
+export function draftDecision(digests: RoundDigest[]): DecisionInput {
+  const last = digests[digests.length - 1];
+  if (!last) return emptyDecision();
+
+  const decided: DecisionInput["decided"] = [];
+  for (const digest of digests) {
+    for (const c of digest.consensus) {
+      if (!decided.some((d) => d.point === c.point)) decided.push({ point: c.point, basis: c.basis });
+    }
+  }
+
   return {
-    decided: digest.consensus.map((c) => ({ point: c.point, basis: c.basis })),
+    decided,
     toMeet: [
-      ...digest.conflicts.map((c) => ({
+      ...last.conflicts.map((c) => ({
         topic: c.topic,
         crux: c.crux,
         attendees: unique(c.positions.flatMap((p) => p.who)),
       })),
-      ...digest.unresolved.map((u) => ({
+      ...last.unresolved.map((u) => ({
         topic: u.topic,
         crux: u.whyOpen,
         attendees: [] as string[],

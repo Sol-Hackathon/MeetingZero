@@ -215,7 +215,7 @@ function HostView() {
         <div className="mt-6">
           <DecisionEditor
             decision={meeting.decision}
-            lastDigest={rounds.filter((round) => round.digest).at(-1)?.digest ?? null}
+            digests={rounds.flatMap((round) => (round.digest ? [round.digest] : []))}
             participantNames={Array.from(
               new Set(rounds.flatMap((round) => round.submissions.map((s) => s.participantName))),
             )}

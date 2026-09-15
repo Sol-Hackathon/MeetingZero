@@ -3,11 +3,12 @@ import * as claude from "./ai/claude";
 import * as claudeCli from "./ai/claude-cli";
 import * as gemini from "./ai/gemini";
 import * as mock from "./ai/mock";
-import type {
-  FollowUpInput,
-  FollowUpPlan,
-  InitialInput,
-  InitialPlan,
+import {
+  fixQuestionIds,
+  type FollowUpInput,
+  type FollowUpPlan,
+  type InitialInput,
+  type InitialPlan,
 } from "./ai/prompts";
 
 export { AiUnavailableError };
@@ -77,6 +78,7 @@ export function generateInitialQuestions(input: InitialInput): Promise<InitialPl
 }
 
 /** 라운드 답변을 정리하고, 남은 쟁점으로 다음 라운드 질문을 만든다. */
-export function synthesizeAndFollowUp(input: FollowUpInput): Promise<FollowUpPlan> {
-  return impl().synthesizeAndFollowUp(input);
+export async function synthesizeAndFollowUp(input: FollowUpInput): Promise<FollowUpPlan> {
+  const plan = await impl().synthesizeAndFollowUp(input);
+  return { ...plan, digest: fixQuestionIds(plan.digest, input.questions) };
 }

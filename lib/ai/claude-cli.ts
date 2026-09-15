@@ -161,6 +161,7 @@ async function generateJson<T extends z.ZodType>(prompt: string, schema: T): Pro
 
   if (code !== 0 || !envelope || envelope.is_error) {
     const raw = `${envelope?.result ?? ""}\n${stderr}\n${stdout}`;
+    console.error(`[claude-cli] exit ${code ?? "?"}`, raw.trim().slice(-1500));
     const known = describeFailure(raw);
     const tail = (envelope?.result || stderr || stdout).trim().slice(-300);
     throw new AiUnavailableError(known || `Claude CLI 호출에 실패했습니다 (exit ${code ?? "?"}). ${tail}`);
@@ -180,6 +181,12 @@ async function generateJson<T extends z.ZodType>(prompt: string, schema: T): Pro
 
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
+    // 어떤 응답이 왔는지 서버 로그에 남긴다. 스키마 제약(개수 등)은 프롬프트로만 지시되기 때문.
+    console.error(
+      "[claude-cli] 형식 불일치:",
+      parsed.error.issues[0]?.message,
+      JSON.stringify(raw).slice(0, 2000),
+    );
     throw new AiUnavailableError(
       `Claude CLI 응답이 예상한 형식과 다릅니다: ${parsed.error.issues[0]?.message ?? ""}`,
     );

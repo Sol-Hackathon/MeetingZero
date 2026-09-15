@@ -8,8 +8,8 @@ import { formatDateTime } from "@/lib/report";
 interface Props {
   /** 확정된 결론. 없으면 초안 편집 상태로 시작한다 */
   decision: Decision | null;
-  /** 초안을 채울 마지막 라운드 정리 결과 */
-  lastDigest: RoundDigest | null;
+  /** 초안을 채울 라운드별 정리 결과 (라운드 순서대로) */
+  digests: RoundDigest[];
   /** 참석자 후보 (답변한 사람들) */
   participantNames: string[];
   busy: boolean;
@@ -19,14 +19,14 @@ interface Props {
 /** 회의를 끝내면서 "정해진 것 / 모여서 정할 것"을 기록하는 카드 */
 export default function DecisionEditor({
   decision,
-  lastDigest,
+  digests,
   participantNames,
   busy,
   onSave,
 }: Props) {
   const [editing, setEditing] = useState(decision === null);
   const [draft, setDraft] = useState<DecisionInput>(() =>
-    decision ? toInput(decision) : draftDecision(lastDigest),
+    decision ? toInput(decision) : draftDecision(digests),
   );
 
   // 확정이 끝나면(서버 상태가 바뀌면) 읽기 모드로 돌아간다.

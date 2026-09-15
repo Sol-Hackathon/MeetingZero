@@ -43,7 +43,7 @@ export const DigestSchema = z.object({
   ),
   perQuestion: z.array(
     z.object({
-      questionId: z.number().describe("입력으로 준 질문의 id를 그대로 사용"),
+      questionId: z.number().describe("입력에서 각 질문 옆 대괄호에 적힌 id 숫자 (Q번호가 아님)"),
       summary: z.string(),
       notable: z.array(z.string()).describe("눈에 띄는 개별 답변 인용"),
     }),
@@ -133,6 +133,7 @@ ${input.goal || "(주최자가 명시하지 않음 — 배경에서 추론할 �
 
 전체 ${input.maxRounds}라운드로 진행할 예정입니다. 지금은 1라운드이므로,
 이후 라운드에서 좁혀 물을 수 있도록 우선 '판단에 필요한 재료'를 넓게 확보하는 질문을 만드세요.
+질문은 3개 이상 8개 이하로 만드세요.
 
 intro 에는 참여자가 왜 이 질문에 답해야 하는지, 언제까지 어떤 태도로 답하면 되는지를
 2~3문장으로 적어주세요. hostNote 에는 주최자가 질문을 검토할 때 특히 확인했으면 하는 점을 한 줄로 적어주세요.`;
@@ -141,9 +142,9 @@ intro 에는 참여자가 왜 이 질문에 답해야 하는지, 언제까지 �
 export function buildFollowUpPrompt(input: FollowUpInput): string {
   const transcript = input.submissions
     .map((submission) => {
-      const lines = input.questions.map((question) => {
+      const lines = input.questions.map((question, index) => {
         const answer = submission.answers.find((a) => a.questionId === question.id);
-        return `  Q${question.id}. ${question.text}\n  A. ${answer?.value?.trim() || "(무응답)"}`;
+        return `  Q${index + 1}. ${question.text}\n  A. ${answer?.value?.trim() || "(무응답)"}`;
       });
       return `[${submission.participantName}]\n${lines.join("\n")}`;
     })
@@ -163,7 +164,7 @@ export function buildFollowUpPrompt(input: FollowUpInput): string {
 - 의견이 갈린 지점(conflicts)은 "누가 맞나"가 아니라 "무엇이 사실이면 생각을 바꾸겠는가"를 묻는다.
 - 정보가 없어서 못 정한 것(unresolved)은 그 정보를 가진 사람이 답할 수 있는 형태로 묻는다.
 - 갈린 선택지는 choice 로 다시 물어 이번 라운드에 수렴 여부를 확인한다.
-- 3개 이하로 줄일 수 있으면 줄인다.
+- 3개 이하로 줄일 수 있으면 줄인다. 많아도 6개를 넘기지 않는다.
 - 만약 추가로 물을 것이 없다면 questions 를 빈 배열로 두고 decisionReady 를 true 로 두세요.`;
 
   return `아래는 "${input.meeting.title}" 회의의 ${input.roundNo}라운드 비동기 답변입니다.
@@ -181,7 +182,7 @@ ${history}
 </이전라운드>
 
 <이번라운드질문>
-${input.questions.map((q) => `Q${q.id} (${q.kind}). ${q.text}`).join("\n")}
+${input.questions.map((q, index) => `Q${index + 1} [id ${q.id}, ${q.kind}] ${q.text}`).join("\n")}
 </이번라운드질문>
 
 <답변 참여자 ${input.submissions.length}명>
@@ -190,7 +191,8 @@ ${transcript}
 
 할 일:
 1) 답변을 정리(digest)하세요. 합의된 것 / 갈린 것 / 아직 답이 안 나온 것을 분리하고,
-   perQuestion 에는 위 질문의 Q번호(id)를 그대로 써서 질문별 요약을 남기세요.
+   perQuestion 의 questionId 에는 각 질문 옆 대괄호에 적힌 id 숫자를 쓰세요 (Q번호가 아닙니다).
+   문장에서 질문을 가리킬 때는 "Q1", "Q2" 처럼 번호로 부르고 id 숫자는 쓰지 마세요.
    consensus 나 conflicts 를 쓸 때는 반드시 실제 답변에 근거해야 하며, 없는 말을 지어내지 마세요.
    답변이 부실해서 판단할 수 없으면 unresolved 로 넘기세요.
    meetingNeeded 에는 지금까지 모인 내용만으로 결론이 가능한지, 아니면 정말 사람이 모여야 하는지
@@ -205,5 +207,21 @@ export function normalizeQuestion(q: z.infer<typeof QuestionSchema>): DraftQuest
     kind: q.kind,
     options: q.kind === "choice" ? q.options.filter(Boolean) : [],
     required: q.required,
+  };
+}
+
+/**
+ * 모델이 perQuestion.questionId 에 id 대신 Q번호(1부터)를 적었을 때 바로잡는다.
+ * 실제 id 집합에 없는 값이 1..n 범위면 그 순서의 질문 id 로 본다.
+ */
+export function fixQuestionIds(digest: RoundDigest, questions: Question[]): RoundDigest {
+  const ids = new Set(questions.map((q) => q.id));
+  return {
+    ...digest,
+    perQuestion: digest.perQuestion.map((item) => {
+      if (ids.has(item.questionId)) return item;
+      const byOrder = questions[item.questionId - 1];
+      return byOrder ? { ...item, questionId: byOrder.id } : item;
+    }),
   };
 }
