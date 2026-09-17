@@ -23,6 +23,8 @@ export interface Meeting {
   /** draft(검토 중) → collecting(답변 수집) → deciding(결론 대기) → closed(결론 확정) */
   status: MeetingStatus;
   decision: Decision | null;
+  /** 주최자가 적어 둔 예상 참여자 이름. 미응답자 표시에 쓴다. 비어 있을 수 있다 */
+  expectedParticipants: string[];
   createdAt: string;
 }
 
@@ -68,6 +70,8 @@ export interface Round {
   digest: RoundDigest | null;
   openedAt: string | null;
   closedAt: string | null;
+  /** 답변 기한. 지나도 제출은 막지 않고 안내만 한다 */
+  deadlineAt: string | null;
   questions: Question[];
 }
 

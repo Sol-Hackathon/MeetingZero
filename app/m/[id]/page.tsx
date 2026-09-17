@@ -6,6 +6,7 @@ import QuestionEditor, { kindLabel } from "@/app/components/QuestionEditor";
 import DigestView from "@/app/components/DigestView";
 import DecisionEditor from "@/app/components/DecisionEditor";
 import ReportActions from "@/app/components/ReportActions";
+import ResponseStatus from "@/app/components/ResponseStatus";
 import type { Decision, DraftQuestion, Question, Round } from "@/lib/types";
 
 interface SubmissionView {
@@ -26,6 +27,7 @@ interface HostState {
     maxRounds: number;
     status: string;
     decision: Decision | null;
+    expectedParticipants: string[];
     createdAt: string;
   };
   rounds: HostRound[];
@@ -158,6 +160,8 @@ function HostView() {
             round={round}
             totalRounds={meeting.maxRounds}
             meetingId={meetingId}
+            meetingTitle={meeting.title}
+            expected={meeting.expectedParticipants}
             busy={busy}
             onSave={(intro, questions) =>
               call(
@@ -172,7 +176,7 @@ function HostView() {
                 return data;
               })
             }
-            onOpen={(intro, questions) =>
+            onOpen={(intro, questions, deadlineAt) =>
               call(
                 "/questions",
                 {
@@ -184,7 +188,7 @@ function HostView() {
                 if (!saved) return null;
                 const data = await call(
                   "/open",
-                  { method: "POST", body: JSON.stringify({ roundNo: round.roundNo }) },
+                  { method: "POST", body: JSON.stringify({ roundNo: round.roundNo, deadlineAt }) },
                   `open-${round.roundNo}`,
                 );
                 if (data) setNotice("참여자 링크가 열렸습니다. 링크를 공유하세요.");
@@ -241,6 +245,8 @@ function RoundCard({
   round,
   totalRounds,
   meetingId,
+  meetingTitle,
+  expected,
   busy,
   onSave,
   onOpen,
@@ -249,12 +255,20 @@ function RoundCard({
   round: HostRound;
   totalRounds: number;
   meetingId: string;
+  meetingTitle: string;
+  expected: string[];
   busy: string | null;
   onSave: (intro: string, questions: DraftQuestion[]) => Promise<unknown>;
-  onOpen: (intro: string, questions: DraftQuestion[]) => Promise<unknown>;
+  onOpen: (
+    intro: string,
+    questions: DraftQuestion[],
+    deadlineAt: string | null,
+  ) => Promise<unknown>;
   onClose: () => Promise<unknown>;
 }) {
   const [intro, setIntro] = useState(round.intro);
+  // datetime-local 입력값. 공개할 때 ISO 로 바꿔 보낸다.
+  const [deadline, setDeadline] = useState("");
   const [questions, setQuestions] = useState<DraftQuestion[]>(() => toDrafts(round.questions));
 
   // 서버 상태가 바뀌면(다음 라운드 생성 등) 편집 중인 내용을 다시 맞춘다.
@@ -306,11 +320,29 @@ function RoundCard({
 
           <QuestionEditor questions={questions} onChange={setQuestions} />
 
+          <div className="mt-5">
+            <label className="label" htmlFor={`deadline-${round.id}`}>
+              답변 기한 <span className="font-normal text-stone-400">(선택)</span>
+            </label>
+            <p className="mt-1 text-[13px] leading-5 text-stone-500">
+              참여자 화면에 표시됩니다. 지나도 제출은 막지 않고, 마감은 여기서 직접 누릅니다.
+            </p>
+            <input
+              id={`deadline-${round.id}`}
+              type="datetime-local"
+              className="input mt-2 w-auto"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+            />
+          </div>
+
           <div className="mt-6 flex flex-wrap gap-2">
             <button
               className="btn-primary"
               disabled={busy !== null}
-              onClick={() => void onOpen(intro, questions)}
+              onClick={() =>
+                void onOpen(intro, questions, deadline ? new Date(deadline).toISOString() : null)
+              }
             >
               {busy === `open-${round.roundNo}` ? "여는 중…" : "참여자에게 공개하기"}
             </button>
@@ -345,26 +377,15 @@ function RoundCard({
             ))}
           </ol>
 
-          <div className="mt-6 border-t border-stone-200 pt-4">
-            <p className="text-sm font-medium text-stone-900">
-              답변 <span className="tabular-nums">{round.submissionCount}</span>명
-              {round.submissionCount === 0 && (
-                <span className="ml-2 font-normal text-stone-500">아직 응답이 없습니다</span>
-              )}
-            </p>
-            {round.submissions.length > 0 && (
-              <ul className="mt-2 flex flex-wrap gap-1.5">
-                {round.submissions.map((submission) => (
-                  <li
-                    key={submission.submissionId}
-                    className="chip bg-stone-100 text-stone-700"
-                    title={new Date(submission.submittedAt).toLocaleString("ko-KR")}
-                  >
-                    {submission.participantName}
-                  </li>
-                ))}
-              </ul>
-            )}
+          <div className="mt-6">
+            <ResponseStatus
+              meetingTitle={meetingTitle}
+              roundNo={round.roundNo}
+              shareUrl={shareUrl}
+              expected={expected}
+              submitted={round.submissions.map((s) => s.participantName)}
+              deadlineAt={round.deadlineAt}
+            />
           </div>
 
           <button

@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS meetings (
   max_rounds    INTEGER NOT NULL DEFAULT 2,
   status        TEXT NOT NULL DEFAULT 'draft',
   decision_json TEXT,
+  expected_json TEXT,
   created_at    TEXT NOT NULL
 );
 
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS rounds (
   digest_json TEXT,
   opened_at   TEXT,
   closed_at   TEXT,
+  deadline_at TEXT,
   created_at  TEXT NOT NULL,
   UNIQUE (meeting_id, round_no)
 );
@@ -90,6 +92,8 @@ CREATE INDEX IF NOT EXISTS idx_answers_submission ON answers(submission_id);
  */
 const ADDED_COLUMNS: { table: string; column: string; definition: string }[] = [
   { table: "meetings", column: "decision_json", definition: "TEXT" },
+  { table: "meetings", column: "expected_json", definition: "TEXT" },
+  { table: "rounds", column: "deadline_at", definition: "TEXT" },
 ];
 
 // dev 서버가 hot reload 될 때마다 커넥션이 새로 열리는 것을 막는다.
@@ -145,6 +149,7 @@ function toMeeting(row: Row): Meeting {
     maxRounds: Number(row.max_rounds),
     status: String(row.status) as Meeting["status"],
     decision: row.decision_json ? (JSON.parse(String(row.decision_json)) as Decision) : null,
+    expectedParticipants: row.expected_json ? (JSON.parse(String(row.expected_json)) as string[]) : [],
     createdAt: String(row.created_at),
   };
 }
@@ -172,6 +177,7 @@ function toRound(row: Row, questions: Question[]): Round {
     digest: row.digest_json ? (JSON.parse(String(row.digest_json)) as RoundDigest) : null,
     openedAt: row.opened_at ? String(row.opened_at) : null,
     closedAt: row.closed_at ? String(row.closed_at) : null,
+    deadlineAt: row.deadline_at ? String(row.deadline_at) : null,
     questions,
   };
 }
@@ -185,6 +191,7 @@ export function createMeeting(input: {
   background: string;
   goal: string;
   maxRounds: number;
+  expectedParticipants: string[];
 }): Meeting {
   const db = getDb();
   const meeting: Meeting = {
@@ -196,11 +203,12 @@ export function createMeeting(input: {
     maxRounds: input.maxRounds,
     status: "draft",
     decision: null,
+    expectedParticipants: input.expectedParticipants,
     createdAt: now(),
   };
   db.prepare(
-    `INSERT INTO meetings (id, host_token, title, background, goal, max_rounds, status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO meetings (id, host_token, title, background, goal, max_rounds, status, expected_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     meeting.id,
     meeting.hostToken,
@@ -209,6 +217,7 @@ export function createMeeting(input: {
     meeting.goal,
     meeting.maxRounds,
     meeting.status,
+    meeting.expectedParticipants.length ? JSON.stringify(meeting.expectedParticipants) : null,
     meeting.createdAt,
   );
   return meeting;
@@ -297,11 +306,11 @@ export function getOpenRound(meetingId: string): Round | null {
   return toRound(row, listQuestions(Number(row.id)));
 }
 
-/** 검토가 끝난 라운드를 참여자에게 연다. */
-export function openRound(roundId: number): void {
+/** 검토가 끝난 라운드를 참여자에게 연다. 기한은 선택. */
+export function openRound(roundId: number, deadlineAt: string | null): void {
   getDb()
-    .prepare(`UPDATE rounds SET status = 'open', opened_at = ? WHERE id = ?`)
-    .run(now(), roundId);
+    .prepare(`UPDATE rounds SET status = 'open', opened_at = ?, deadline_at = ? WHERE id = ?`)
+    .run(now(), deadlineAt, roundId);
 }
 
 /**
