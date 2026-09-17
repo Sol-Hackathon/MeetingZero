@@ -160,7 +160,6 @@ export async function generateInitialQuestions(input: InitialInput): Promise<Ini
   return {
     intro: plan.intro,
     questions: plan.questions.map(normalizeQuestion),
-    hostNote: plan.hostNote,
   };
 }
 
@@ -170,6 +169,5 @@ export async function synthesizeAndFollowUp(input: FollowUpInput): Promise<Follo
     digest: plan.digest as RoundDigest,
     intro: plan.intro,
     questions: plan.questions.map(normalizeQuestion),
-    hostNote: plan.hostNote,
   };
 }

@@ -35,6 +35,15 @@ export default function DigestView({ digest, questions, submissions }: Props) {
         )}
       </p>
 
+      {digest.proposal && (
+        <Section title="결론 후보" tone="emerald">
+          <p className="text-[15px] leading-relaxed text-stone-800">{digest.proposal}</p>
+          <p className="mt-0.5 text-[13px] leading-5 text-stone-500">
+            결론 확정 초안의 첫 항목으로 들어갑니다. 확정 전에 다듬거나 지우면 됩니다.
+          </p>
+        </Section>
+      )}
+
       {digest.consensus.length > 0 && (
         <Section title="합의된 것" tone="emerald">
           <ul className="space-y-2.5">

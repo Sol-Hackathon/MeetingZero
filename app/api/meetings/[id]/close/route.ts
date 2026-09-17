@@ -75,15 +75,16 @@ export async function POST(
 
       return ok({
         digest: plan.digest,
-        hostNote: plan.hostNote,
         nextRoundNo,
         meetingStatus: nextRoundNo ? "collecting" : "deciding",
-        /** 다음 라운드가 만들어지지 않은 이유 */
+        /** 다음 라운드가 만들어지지 않은 이유. AI 의 결론 신호(결론 가능 / 회의 필요)에 맞춰 고른다 */
         finishedReason: nextRoundNo
           ? null
           : isFinalRound
             ? "정해둔 마지막 라운드까지 진행했습니다. 결론을 확정해 주세요."
-            : "AI 판단상 더 물어볼 것이 남지 않았습니다. 결론을 확정해 주세요.",
+            : plan.digest.decisionReady
+              ? "AI 판단상 더 묻지 않아도 결론을 낼 수 있습니다. 결론을 확정해 주세요."
+              : "AI 판단상 비동기 질문으로는 더 좁히기 어렵습니다. 모여서 정할 것을 확인하고 결론을 확정해 주세요.",
         rounds: listRounds(id),
       });
     } finally {

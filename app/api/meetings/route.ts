@@ -52,7 +52,6 @@ export async function POST(request: Request) {
     return ok({
       meetingId: meeting.id,
       hostToken: meeting.hostToken,
-      hostNote: plan.hostNote,
       /** 어떤 모델이 질문을 만들었는지 (디버깅·seed 로그용) */
       provider: activeProvider(),
       round,

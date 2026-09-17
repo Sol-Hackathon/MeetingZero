@@ -249,6 +249,13 @@ function EvidenceDoc({
     <div className="space-y-6">
       <p className="text-[15px] leading-relaxed text-stone-800">{digest.overview}</p>
 
+      {showConsensus && digest.proposal && (
+        <div>
+          <Subheading>AI 결론 후보</Subheading>
+          <p className="text-[15px] leading-relaxed text-stone-800">{digest.proposal}</p>
+        </div>
+      )}
+
       {showConsensus && digest.consensus.length > 0 && (
         <div>
           <Subheading>의견이 모인 지점</Subheading>

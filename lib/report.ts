@@ -228,6 +228,7 @@ export function buildMarkdown(data: ReportData): string {
   if (last?.digest) {
     const digest = last.digest;
     push(`## 근거 (AI 정리, ${last.roundNo}라운드 기준)`, "", digest.overview, "");
+    if (!decision && digest.proposal) push("**AI 결론 후보**", "", digest.proposal, "");
     if (!decision && digest.consensus.length) {
       push("**의견이 모인 지점**", "");
       for (const c of digest.consensus) {
