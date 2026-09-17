@@ -63,6 +63,7 @@ export async function GET(
         roundNo: round.roundNo,
         totalRounds: meeting.maxRounds,
         intro: round.intro,
+        deadlineAt: round.deadlineAt,
         // intent(질문 의도)는 주최자 전용이라 내려보내지 않는다.
         questions: round.questions.map((q) => ({
           id: q.id,
