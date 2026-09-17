@@ -27,6 +27,7 @@ export async function GET(
         maxRounds: meeting.maxRounds,
         status: meeting.status,
         decision: meeting.decision,
+        expectedParticipants: meeting.expectedParticipants,
         createdAt: meeting.createdAt,
       },
       rounds: listRoundsWithSubmissions(id),
