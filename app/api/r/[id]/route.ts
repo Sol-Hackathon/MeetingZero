@@ -12,6 +12,10 @@ import { fail, handleError, ok } from "@/lib/api";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const MAX_NAME_LENGTH = 40;
+/** 답변 하나의 상한. 정리 프롬프트 길이를 묶어 두기 위한 것 (참여자 20명 × 질문 8개여도 50만 자 안) */
+const MAX_ANSWER_LENGTH = 3000;
+
 /** 참여자 화면: 지금 열려 있는 라운드의 질문을 돌려준다. (로그인 없음) */
 export async function GET(
   request: Request,
@@ -96,20 +100,27 @@ export async function POST(
     };
 
     const participantToken = String(body.participantToken ?? "").trim();
-    const name = String(body.name ?? "").trim();
+    // 이름은 정리 프롬프트에서 답변 머리와 참여자 명단에 그대로 들어간다. 한 줄, 괄호·꺾쇠 없이, 40자 안.
+    const name = String(body.name ?? "")
+      .replace(/\s+/g, " ")
+      .replace(/[<>[\]]/g, "")
+      .trim();
     if (!participantToken) return fail("잘못된 요청입니다.");
     if (!name) return fail("이름(또는 닉네임)을 입력해 주세요.");
+    if (name.length > MAX_NAME_LENGTH) return fail(`이름은 ${MAX_NAME_LENGTH}자 이하로 적어 주세요.`);
 
     const byId = new Map(round.questions.map((q) => [q.id, q]));
     const answers = (body.answers ?? [])
       .filter((a) => byId.has(Number(a.questionId)))
       .map((a) => ({ questionId: Number(a.questionId), value: String(a.value ?? "").trim() }));
 
-    for (const question of round.questions) {
-      if (!question.required) continue;
+    for (const [index, question] of round.questions.entries()) {
       const answer = answers.find((a) => a.questionId === question.id);
-      if (!answer || !answer.value) {
-        return fail(`필수 질문에 답해 주세요: "${question.text}"`);
+      if (question.required && (!answer || !answer.value)) {
+        return fail(`Q${index + 1}은 필수 질문입니다. 답을 적어 주세요.`);
+      }
+      if (answer && answer.value.length > MAX_ANSWER_LENGTH) {
+        return fail(`Q${index + 1} 답변이 너무 깁니다. ${MAX_ANSWER_LENGTH.toLocaleString("ko-KR")}자 이하로 줄여 주세요.`);
       }
     }
 

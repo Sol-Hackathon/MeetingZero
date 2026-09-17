@@ -42,6 +42,8 @@ export default function AnswerStats({ question, submissions }: Props) {
       ? choiceRows(question.options, picked)
       : scaleRows(picked);
   const max = Math.max(...rows.map((row) => row.who.length));
+  // 최다 선택지가 하나일 때만 진하게. 전원이 1명씩이면 전부 강조돼 아무것도 강조되지 않는다.
+  const top = rows.filter((row) => row.who.length === max).length === 1 ? max : -1;
 
   return (
     <div>
@@ -74,7 +76,7 @@ export default function AnswerStats({ question, submissions }: Props) {
             <div className="col-span-2 h-1.5 bg-stone-100" aria-hidden>
               <div
                 className={
-                  row.who.length === max
+                  row.who.length === top
                     ? "h-full bg-stone-900"
                     : "h-full bg-stone-400"
                 }

@@ -24,7 +24,8 @@ import type { RoundDigest } from "../types";
  */
 
 const DEFAULT_MODEL = "sonnet";
-const TIMEOUT_MS = 180_000;
+/** 정리 호출은 답변이 많으면 3분을 넘긴다. 마감 라우트의 maxDuration(300초) 안에서 최대한 기다린다. */
+const TIMEOUT_MS = 290_000;
 
 function command(): string {
   return process.env.CLAUDE_CLI_PATH || "claude";
@@ -46,11 +47,26 @@ function childEnv(): NodeJS.ProcessEnv {
 /**
  * zod 스키마를 CLI 에 넘길 JSON 스키마로. 구조화 출력이 받지 않는 길이·범위 제약은 뺀다.
  * 그 제약은 응답을 받은 뒤 zod 가 다시 검사한다.
+ *
+ * 전체를 output 한 필드로 감싼다. CLI 는 구조화 출력을 도구 호출로 구현하는데, 최상위에 문자열 필드가 있으면
+ * 모델이 그 필드를 잘못 닫아 뒤따르는 필드를 통째로 삼키는 실수가 관찰됐다(intro 가 questions 를 삼킴).
+ * 객체 하나만 넘기면 JSON 으로 직렬화되므로 그 실수가 생기지 않는다.
  */
 function toJsonSchema(schema: z.ZodType): string {
   const json = z.toJSONSchema(schema) as Record<string, unknown>;
   delete json.$schema;
-  return JSON.stringify(stripConstraints(json));
+  return JSON.stringify({
+    type: "object",
+    properties: { output: stripConstraints(json) },
+    required: ["output"],
+    additionalProperties: false,
+  });
+}
+
+/** 감싼 output 을 벗긴다. 모델이 감싸지 않고 냈어도 받아준다. */
+function unwrap(raw: unknown): unknown {
+  if (raw && typeof raw === "object" && "output" in raw) return (raw as { output: unknown }).output;
+  return raw;
 }
 
 const UNSUPPORTED = new Set(["minItems", "maxItems", "minLength", "maxLength", "minimum", "maximum", "pattern"]);
@@ -136,8 +152,17 @@ function describeFailure(raw: string): string {
   if (/nested|inside (a )?claude code/i.test(raw)) {
     return "Claude Code 세션 안에서는 다시 실행할 수 없습니다. 일반 터미널에서 서버를 띄워 주세요.";
   }
+  if (/valid structured output|does not match required schema/i.test(raw)) {
+    return "Claude CLI 가 정해진 형식으로 답하지 못했습니다.";
+  }
   return "";
 }
+
+/** 새 프로세스로 한 번 더 부르면 대개 풀리는 실패 (형식 실수). 로그인·한도·시간 초과는 해당 없음. */
+class RetryableFailure extends Error {}
+
+/** 첫 시도가 이 시간을 넘겼으면 재시도하지 않는다. 마감 라우트 안에서 두 번을 다 기다릴 수 없다. */
+const RETRY_DEADLINE_MS = 120_000;
 
 async function generateJson<T extends z.ZodType>(prompt: string, schema: T): Promise<z.infer<T>> {
   const args = [
@@ -150,6 +175,26 @@ async function generateJson<T extends z.ZodType>(prompt: string, schema: T): Pro
     "--no-session-persistence",
     "--model", modelName(),
   ];
+  const started = Date.now();
+  try {
+    return await callOnce(args, prompt, schema);
+  } catch (error) {
+    if (!(error instanceof RetryableFailure)) throw error;
+    if (Date.now() - started > RETRY_DEADLINE_MS) {
+      throw new AiUnavailableError(`${error.message} 다시 시도해 주세요.`);
+    }
+    // 같은 문맥에서는 같은 실수가 반복된다. 프로세스를 새로 띄워 한 번만 더 시도한다.
+    console.error("[claude-cli] 형식 실패, 새 프로세스로 재시도:", error.message);
+    try {
+      return await callOnce(args, prompt, schema);
+    } catch (again) {
+      if (again instanceof RetryableFailure) throw new AiUnavailableError(`${again.message} 다시 시도해 주세요.`);
+      throw again;
+    }
+  }
+}
+
+async function callOnce<T extends z.ZodType>(args: string[], prompt: string, schema: T): Promise<z.infer<T>> {
   const { code, stdout, stderr } = await run(args, prompt);
 
   let envelope: Envelope | null = null;
@@ -164,19 +209,21 @@ async function generateJson<T extends z.ZodType>(prompt: string, schema: T): Pro
     console.error(`[claude-cli] exit ${code ?? "?"}`, raw.trim().slice(-1500));
     const known = describeFailure(raw);
     const tail = (envelope?.result || stderr || stdout).trim().slice(-300);
-    throw new AiUnavailableError(known || `Claude CLI 호출에 실패했습니다 (exit ${code ?? "?"}). ${tail}`);
+    const message = known || `Claude CLI 호출에 실패했습니다 (exit ${code ?? "?"}). ${tail}`;
+    if (/valid structured output|does not match required schema/i.test(raw)) throw new RetryableFailure(message);
+    throw new AiUnavailableError(message);
   }
 
-  let raw: unknown = envelope.structured_output;
+  let raw: unknown = unwrap(envelope.structured_output);
   if (raw === undefined && typeof envelope.result === "string") {
     try {
-      raw = JSON.parse(envelope.result);
+      raw = unwrap(JSON.parse(envelope.result));
     } catch {
       raw = undefined;
     }
   }
   if (raw === undefined) {
-    throw new AiUnavailableError("Claude CLI 응답에서 JSON 을 찾지 못했습니다. 다시 시도해 주세요.");
+    throw new RetryableFailure("Claude CLI 응답에서 JSON 을 찾지 못했습니다.");
   }
 
   const parsed = schema.safeParse(raw);
@@ -187,7 +234,7 @@ async function generateJson<T extends z.ZodType>(prompt: string, schema: T): Pro
       parsed.error.issues[0]?.message,
       JSON.stringify(raw).slice(0, 2000),
     );
-    throw new AiUnavailableError(
+    throw new RetryableFailure(
       `Claude CLI 응답이 예상한 형식과 다릅니다: ${parsed.error.issues[0]?.message ?? ""}`,
     );
   }
@@ -199,7 +246,6 @@ export async function generateInitialQuestions(input: InitialInput): Promise<Ini
   return {
     intro: plan.intro,
     questions: plan.questions.map(normalizeQuestion),
-    hostNote: plan.hostNote,
   };
 }
 
@@ -209,6 +255,5 @@ export async function synthesizeAndFollowUp(input: FollowUpInput): Promise<Follo
     digest: plan.digest as RoundDigest,
     intro: plan.intro,
     questions: plan.questions.map(normalizeQuestion),
-    hostNote: plan.hostNote,
   };
 }

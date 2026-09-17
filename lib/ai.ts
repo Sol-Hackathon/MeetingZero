@@ -4,7 +4,10 @@ import * as claudeCli from "./ai/claude-cli";
 import * as gemini from "./ai/gemini";
 import * as mock from "./ai/mock";
 import {
+  demoteWeakConsensus,
+  fixNames,
   fixQuestionIds,
+  normalizeSignals,
   type FollowUpInput,
   type FollowUpPlan,
   type InitialInput,
@@ -72,13 +75,30 @@ export function activeProvider(): string {
   }
 }
 
-/** 주제·배경으로 1라운드 질문을 만든다. */
-export function generateInitialQuestions(input: InitialInput): Promise<InitialPlan> {
-  return impl().generateInitialQuestions(input);
+/** 서술형 개수 규칙(3개 이하)은 프롬프트로만 지시된다. 어겼으면 서버 로그에 남겨 프롬프트를 손볼 근거로 삼는다. */
+function warnOpenBudget(questions: { kind: string }[], label: string) {
+  const open = questions.filter((q) => q.kind === "open").length;
+  if (open > 3) console.warn(`[ai] ${label}: 서술형 질문 ${open}개 (규칙은 3개 이하)`);
 }
 
-/** 라운드 답변을 정리하고, 남은 쟁점으로 다음 라운드 질문을 만든다. */
+/** 주제·배경으로 1라운드 질문을 만든다. */
+export async function generateInitialQuestions(input: InitialInput): Promise<InitialPlan> {
+  const plan = await impl().generateInitialQuestions(input);
+  warnOpenBudget(plan.questions, "1라운드 질문");
+  return plan;
+}
+
+/**
+ * 라운드 답변을 정리하고, 남은 쟁점으로 다음 라운드 질문을 만든다.
+ * 모델이 흔들리기 쉬운 값(질문 id, 참여자 이름, 1인 합의, 결론 신호 조합)은 여기서 바로잡는다.
+ * 어떤 provider 를 쓰든 같은 보정을 거친다.
+ */
 export async function synthesizeAndFollowUp(input: FollowUpInput): Promise<FollowUpPlan> {
-  const plan = await impl().synthesizeAndFollowUp(input);
-  return { ...plan, digest: fixQuestionIds(plan.digest, input.questions) };
+  const raw = await impl().synthesizeAndFollowUp(input);
+  warnOpenBudget(raw.questions, `${input.roundNo + 1}라운드 재질문`);
+  const names = Array.from(new Set(input.submissions.map((s) => s.participantName)));
+  let digest = fixQuestionIds(raw.digest, input.questions);
+  digest = fixNames(digest, names);
+  digest = demoteWeakConsensus(digest, input.submissions.length);
+  return normalizeSignals({ ...raw, digest }, input.isFinalRound);
 }

@@ -41,16 +41,19 @@ export interface Question {
 export interface RoundDigest {
   /** 라운드 전체를 2~4문장으로 요약 */
   overview: string;
-  /** 참여자들이 사실상 같은 이야기를 한 지점 */
-  consensus: { point: string; basis: string }[];
-  /** 의견이 갈린 지점 */
+  /** 마지막 라운드에만: 주최자가 지금 정할 수 있는 결론 후보. 결론 초안의 첫 항목이 된다. 옛 데이터에는 없다 */
+  proposal?: string;
+  /** 답변자 과반이 명시적으로 같은 이야기를 한 지점. supporters 는 그렇게 말한 사람 */
+  consensus: { point: string; basis: string; supporters?: string[] }[];
+  /** 의견이 갈린 지점. kind 는 갈림의 성격 (사실 / 가치 / 선호) — 재질문 형식이 여기에 따라 달라진다 */
   conflicts: {
     topic: string;
+    kind?: "fact" | "value" | "preference";
     positions: { stance: string; who: string[] }[];
     crux: string;
   }[];
-  /** 답이 나오지 않았거나 정보가 부족해 다음 라운드로 넘겨야 하는 것 */
-  unresolved: { topic: string; whyOpen: string }[];
+  /** 답이 나오지 않았거나 정보가 부족해 다음 라운드로 넘겨야 하는 것. askWho 는 그 정보를 가진 사람 */
+  unresolved: { topic: string; whyOpen: string; askWho?: string[] }[];
   /** 질문별 요약 */
   perQuestion: { questionId: number; summary: string; notable: string[] }[];
   /** 더 물어볼 것 없이 결론을 낼 수 있는 상태인지 */
