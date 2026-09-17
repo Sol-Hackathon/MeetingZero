@@ -1,14 +1,17 @@
 "use client";
 
 import type { Question, RoundDigest } from "@/lib/types";
+import AnswerStats, { type StatsSubmission } from "./AnswerStats";
 
 interface Props {
   digest: RoundDigest;
   questions: Question[];
+  /** 있으면 질문별 요약 옆에 선택형 · 척도 응답 분포를 같이 그린다 */
+  submissions?: StatsSubmission[];
 }
 
 /** 한 라운드 답변을 AI가 정리한 결과 */
-export default function DigestView({ digest, questions }: Props) {
+export default function DigestView({ digest, questions, submissions }: Props) {
   const questionById = new Map(questions.map((q) => [q.id, q]));
 
   return (
@@ -90,26 +93,34 @@ export default function DigestView({ digest, questions }: Props) {
             질문별 요약
           </summary>
           <ul className="mt-4 space-y-4">
-            {digest.perQuestion.map((item, index) => (
-              <li key={index}>
-                <p className="text-sm font-medium text-stone-900">
-                  {questionById.get(item.questionId)?.text ?? `질문 #${item.questionId}`}
-                </p>
-                <p className="mt-1 text-[15px] leading-relaxed text-stone-700">{item.summary}</p>
-                {item.notable.length > 0 && (
-                  <ul className="mt-1.5 space-y-1">
-                    {item.notable.map((note, noteIndex) => (
-                      <li
-                        key={noteIndex}
-                        className="border-l-2 border-stone-300 pl-2.5 text-[13px] leading-5 text-stone-600"
-                      >
-                        {note}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))}
+            {digest.perQuestion.map((item, index) => {
+              const question = questionById.get(item.questionId);
+              return (
+                <li key={index}>
+                  <p className="text-sm font-medium text-stone-900">
+                    {question?.text ?? `질문 #${item.questionId}`}
+                  </p>
+                  <p className="mt-1 text-[15px] leading-relaxed text-stone-700">{item.summary}</p>
+                  {submissions && question && question.kind !== "open" && (
+                    <div className="mt-2">
+                      <AnswerStats question={question} submissions={submissions} />
+                    </div>
+                  )}
+                  {item.notable.length > 0 && (
+                    <ul className="mt-1.5 space-y-1">
+                      {item.notable.map((note, noteIndex) => (
+                        <li
+                          key={noteIndex}
+                          className="border-l-2 border-stone-300 pl-2.5 text-[13px] leading-5 text-stone-600"
+                        >
+                          {note}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </details>
       )}

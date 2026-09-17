@@ -22,7 +22,7 @@
 8. 기한과 응답 현황 → 예상 참여자를 적어 두면 누가 아직 안 했는지 보이고, 기한을 정하면
    참여자 화면에 표시. 슬랙에 붙일 리마인드 문구를 복사
 
-아직 만들지 않은 것: 응답 분포 시각화, 이메일/슬랙 발송.
+아직 만들지 않은 것: 이메일/슬랙 발송.
 
 ## 실행
 
@@ -168,6 +168,7 @@ app/
   components/
     QuestionEditor.tsx        질문 검토·편집기
     DigestView.tsx            라운드 정리 결과 표시
+    AnswerStats.tsx           선택형 · 5점 척도 응답 분포 (수집 중과 마감 후 모두)
     DecisionEditor.tsx        결론 확정 편집기 (초안은 마지막 정리 결과에서)
     ReportActions.tsx         리포트 보기 · 마크다운 복사
     ResponseStatus.tsx        응답 현황 · 미응답자 · 리마인드 문구
@@ -226,4 +227,4 @@ meetings ─┬─ rounds ─┬─ questions
 
 ## 다음 단계 후보
 
-- 선택형 질문 응답 분포 시각화
+- 이메일/슬랙 발송

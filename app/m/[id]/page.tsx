@@ -6,6 +6,7 @@ import QuestionEditor, { kindLabel } from "@/app/components/QuestionEditor";
 import DigestView from "@/app/components/DigestView";
 import DecisionEditor from "@/app/components/DecisionEditor";
 import ReportActions from "@/app/components/ReportActions";
+import AnswerStats from "@/app/components/AnswerStats";
 import ResponseStatus from "@/app/components/ResponseStatus";
 import type { Decision, DraftQuestion, Question, Round } from "@/lib/types";
 
@@ -388,6 +389,8 @@ function RoundCard({
             />
           </div>
 
+          <Distribution round={round} />
+
           <button
             className="btn-primary mt-5"
             disabled={busy !== null || round.submissionCount === 0}
@@ -405,7 +408,11 @@ function RoundCard({
       {round.status === "closed" && (
         <>
           {round.digest ? (
-            <DigestView digest={round.digest} questions={round.questions} />
+            <DigestView
+              digest={round.digest}
+              questions={round.questions}
+              submissions={round.submissions}
+            />
           ) : (
             <p className="text-sm text-stone-500">정리된 내용이 없습니다.</p>
           )}
@@ -441,6 +448,31 @@ function ShareBox({ url }: { url: string }) {
           {copied ? "복사됨" : "복사"}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** 수집 중 응답 분포. 마감 전에 분포를 보고 마감 시점을 정할 수 있게 한다. */
+function Distribution({ round }: { round: HostRound }) {
+  const questions = round.questions
+    .map((question, index) => ({ question, index }))
+    .filter(({ question }) => question.kind !== "open");
+  if (questions.length === 0) return null;
+  return (
+    <div className="mt-6 border-t border-stone-200 pt-4">
+      <p className="text-sm font-medium text-stone-900">응답 분포</p>
+      <ul className="mt-3 space-y-5">
+        {questions.map(({ question, index }) => (
+          <li key={question.id}>
+            <p className="mb-2 text-[13px] leading-5 text-stone-700">
+              <span className="mr-2 font-display text-stone-400 tabular-nums">Q{index + 1}</span>
+              {question.text}
+              <span className="ml-2 text-xs text-stone-500">{kindLabel(question.kind)}</span>
+            </p>
+            <AnswerStats question={question} submissions={round.submissions} />
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
