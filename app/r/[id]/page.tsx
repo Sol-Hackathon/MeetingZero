@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import type { QuestionKind } from "@/lib/types";
+import { formatDateTime } from "@/lib/report";
 
 interface PublicQuestion {
   id: number;
@@ -20,6 +21,7 @@ interface PublicState {
     roundNo: number;
     totalRounds: number;
     intro: string;
+    deadlineAt: string | null;
     questions: PublicQuestion[];
   } | null;
   myAnswers: { questionId: number; value: string }[];
@@ -151,6 +153,22 @@ export default function ParticipantPage() {
         <h1 className="mt-2 font-display text-3xl font-semibold leading-tight text-stone-900">
           {data.meeting.title}
         </h1>
+        {round.deadlineAt && (
+          <p className="mt-3 text-[13px] leading-5 text-stone-600 tabular-nums">
+            {new Date(round.deadlineAt).getTime() < Date.now() ? (
+              <>
+                <span className="font-medium text-amber-700">기한이 지났습니다.</span> 주최자가 곧
+                마감합니다. 지금 답해도 반영됩니다.
+              </>
+            ) : (
+              <>
+                <span className="font-medium text-stone-700">답변 기한</span>
+                <span className="mx-1.5 text-stone-300">·</span>
+                {formatDateTime(round.deadlineAt)}
+              </>
+            )}
+          </p>
+        )}
       </header>
 
       {data.previous && (

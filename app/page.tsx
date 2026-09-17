@@ -39,6 +39,7 @@ export default function HomePage() {
   const [background, setBackground] = useState("");
   const [goal, setGoal] = useState("");
   const [maxRounds, setMaxRounds] = useState(2);
+  const [expected, setExpected] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hosted, setHosted] = useState<SavedMeeting[]>([]);
@@ -53,7 +54,7 @@ export default function HomePage() {
       const response = await fetch("/api/meetings", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, background, goal, maxRounds }),
+        body: JSON.stringify({ title, background, goal, maxRounds, expectedParticipants: expected }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "질문 생성에 실패했습니다.");
@@ -157,6 +158,23 @@ export default function HomePage() {
             placeholder="예: 3주 안에 무엇을 만들지 하나로 정하기"
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="label" htmlFor="expected">
+            예상 참여자 <span className="font-normal text-stone-400">(선택)</span>
+          </label>
+          <p className="mt-1 text-[13px] leading-5 text-stone-500">
+            한 줄에 한 명씩 적으면 누가 아직 답하지 않았는지 보여주고, 리마인드 문구에 이름을 넣어
+            드립니다.
+          </p>
+          <textarea
+            id="expected"
+            className="input mt-2 min-h-[88px] resize-y"
+            placeholder={"김지민\n박서준 (개발팀)\n이수아"}
+            value={expected}
+            onChange={(e) => setExpected(e.target.value)}
           />
         </div>
 
