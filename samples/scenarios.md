@@ -203,7 +203,7 @@ npm run seed 1
 호출이 참여자 수 × 라운드 수만큼 추가됩니다.
 
 ```bash
-npm run seed 1 --ai
+npm run seed -- 1 --ai
 ```
 
 > `gemini-3.6-flash` 무료 한도는 **하루 20회**입니다. 여러 번 돌려볼 거면
