@@ -8,6 +8,8 @@ import DecisionEditor from "@/app/components/DecisionEditor";
 import ReportActions from "@/app/components/ReportActions";
 import AnswerStats from "@/app/components/AnswerStats";
 import ResponseStatus from "@/app/components/ResponseStatus";
+import { roundMetaLine } from "@/lib/report";
+import { statsLine, summarize } from "@/lib/stats";
 import type { Decision, DraftQuestion, Question, Round } from "@/lib/types";
 
 interface SubmissionView {
@@ -111,6 +113,88 @@ function HostView() {
 
   const { meeting, rounds } = state;
   const status = MEETING_STATUS[meeting.status] ?? { label: meeting.status, cls: "status" };
+  const isClosed = meeting.status === "closed";
+  const isDeciding = meeting.status === "deciding";
+  // 결정 대기 중에는 초안의 근거인 마지막 마감 라운드만 펼쳐 둔다. 종료 후에는 전부 접는다.
+  const lastClosedId = [...rounds].reverse().find((round) => round.status === "closed")?.id ?? null;
+
+  const decisionCard = (isDeciding || isClosed) && (
+    <DecisionEditor
+      decision={meeting.decision}
+      digests={rounds.flatMap((round) => (round.digest ? [round.digest] : []))}
+      participantNames={Array.from(
+        new Set(rounds.flatMap((round) => round.submissions.map((s) => s.participantName))),
+      )}
+      busy={busy === "decide"}
+      onSave={(input) =>
+        call("/decide", { method: "POST", body: JSON.stringify(input) }, "decide").then((data) => {
+          if (data) setNotice("결론을 확정했습니다. 리포트는 위쪽 버튼으로 볼 수 있습니다.");
+          return data;
+        })
+      }
+    />
+  );
+
+  const roundCards = rounds.map((round) => (
+    <RoundCard
+      key={round.id}
+      round={round}
+      totalRounds={meeting.maxRounds}
+      meetingId={meetingId}
+      meetingTitle={meeting.title}
+      expected={meeting.expectedParticipants}
+      collapsed={round.status === "closed" && (isClosed || round.id !== lastClosedId)}
+      busy={busy}
+      onSave={(intro, questions) =>
+        call(
+          "/questions",
+          {
+            method: "PUT",
+            body: JSON.stringify({ roundNo: round.roundNo, intro, questions }),
+          },
+          `save-${round.roundNo}`,
+        ).then((data) => {
+          if (data) setNotice("질문을 저장했습니다.");
+          return data;
+        })
+      }
+      onOpen={(intro, questions, deadlineAt) =>
+        call(
+          "/questions",
+          {
+            method: "PUT",
+            body: JSON.stringify({ roundNo: round.roundNo, intro, questions }),
+          },
+          `open-${round.roundNo}`,
+        ).then(async (saved) => {
+          if (!saved) return null;
+          const data = await call(
+            "/open",
+            { method: "POST", body: JSON.stringify({ roundNo: round.roundNo, deadlineAt }) },
+            `open-${round.roundNo}`,
+          );
+          if (data) setNotice("참여자 링크가 열렸습니다. 링크를 공유하세요.");
+          return data;
+        })
+      }
+      onClose={() =>
+        call(
+          "/close",
+          { method: "POST", body: JSON.stringify({ roundNo: round.roundNo }) },
+          `close-${round.roundNo}`,
+        ).then((data) => {
+          if (data) {
+            setNotice(
+              data.nextRoundNo
+                ? `의견을 정리하고 ${data.nextRoundNo}라운드 질문을 만들었습니다. 검토 후 공개하세요.`
+                : `답변 정리를 마쳤습니다. ${data.finishedReason ?? ""}`,
+            );
+          }
+          return data;
+        })
+      }
+    />
+  ));
 
   return (
     <main className="mx-auto max-w-3xl px-5 pb-20 pt-10">
@@ -154,87 +238,18 @@ function HostView() {
         </p>
       )}
 
-      <div className="mt-10 space-y-6">
-        {rounds.map((round) => (
-          <RoundCard
-            key={round.id}
-            round={round}
-            totalRounds={meeting.maxRounds}
-            meetingId={meetingId}
-            meetingTitle={meeting.title}
-            expected={meeting.expectedParticipants}
-            busy={busy}
-            onSave={(intro, questions) =>
-              call(
-                "/questions",
-                {
-                  method: "PUT",
-                  body: JSON.stringify({ roundNo: round.roundNo, intro, questions }),
-                },
-                `save-${round.roundNo}`,
-              ).then((data) => {
-                if (data) setNotice("질문을 저장했습니다.");
-                return data;
-              })
-            }
-            onOpen={(intro, questions, deadlineAt) =>
-              call(
-                "/questions",
-                {
-                  method: "PUT",
-                  body: JSON.stringify({ roundNo: round.roundNo, intro, questions }),
-                },
-                `open-${round.roundNo}`,
-              ).then(async (saved) => {
-                if (!saved) return null;
-                const data = await call(
-                  "/open",
-                  { method: "POST", body: JSON.stringify({ roundNo: round.roundNo, deadlineAt }) },
-                  `open-${round.roundNo}`,
-                );
-                if (data) setNotice("참여자 링크가 열렸습니다. 링크를 공유하세요.");
-                return data;
-              })
-            }
-            onClose={() =>
-              call(
-                "/close",
-                { method: "POST", body: JSON.stringify({ roundNo: round.roundNo }) },
-                `close-${round.roundNo}`,
-              ).then((data) => {
-                if (data) {
-                  setNotice(
-                    data.nextRoundNo
-                      ? `의견을 정리하고 ${data.nextRoundNo}라운드 질문을 만들었습니다. 검토 후 공개하세요.`
-                      : `답변 정리를 마쳤습니다. ${data.finishedReason ?? ""}`,
-                  );
-                }
-                return data;
-              })
-            }
-          />
-        ))}
-      </div>
-
-      {(meeting.status === "deciding" || meeting.status === "closed") && (
-        <div className="mt-6">
-          <DecisionEditor
-            decision={meeting.decision}
-            digests={rounds.flatMap((round) => (round.digest ? [round.digest] : []))}
-            participantNames={Array.from(
-              new Set(rounds.flatMap((round) => round.submissions.map((s) => s.participantName))),
-            )}
-            busy={busy === "decide"}
-            onSave={(input) =>
-              call("/decide", { method: "POST", body: JSON.stringify(input) }, "decide").then(
-                (data) => {
-                  if (data) setNotice("결론을 확정했습니다. 리포트는 위쪽 버튼으로 볼 수 있습니다.");
-                  return data;
-                },
-              )
-            }
-          />
-        </div>
+      {isClosed ? (
+        // 종료된 회의는 결론이 먼저. 라운드 기록은 그 아래에 시간순으로, 접어서.
+        <>
+          <div className="mt-10">{decisionCard}</div>
+          <p className="eyebrow mt-10">진행 경과</p>
+          <div className="mt-3 space-y-6">{roundCards}</div>
+        </>
+      ) : (
+        <>
+          <div className="mt-10 space-y-6">{roundCards}</div>
+          {decisionCard && <div className="mt-6">{decisionCard}</div>}
+        </>
       )}
     </main>
   );
@@ -248,6 +263,7 @@ function RoundCard({
   meetingId,
   meetingTitle,
   expected,
+  collapsed,
   busy,
   onSave,
   onOpen,
@@ -258,6 +274,8 @@ function RoundCard({
   meetingId: string;
   meetingTitle: string;
   expected: string[];
+  /** 마감된 라운드를 처음에 접어 둘지 */
+  collapsed: boolean;
   busy: string | null;
   onSave: (intro: string, questions: DraftQuestion[]) => Promise<unknown>;
   onOpen: (
@@ -292,17 +310,51 @@ function RoundCard({
         ? { label: "답변 수집 중", cls: "status status-live" }
         : { label: "마감", cls: "status status-done" };
 
+  const heading = (
+    <div className="flex items-baseline justify-between gap-4">
+      <h2 className="font-display text-xl font-semibold text-stone-900">
+        {round.roundNo}라운드
+        <span className="ml-1.5 text-sm font-normal text-stone-400 tabular-nums">
+          / {totalRounds}
+        </span>
+      </h2>
+      <span className={status.cls}>{status.label}</span>
+    </div>
+  );
+
+  if (round.status === "closed") {
+    // 마감된 라운드는 요약 한 줄로 접힌다. 결정 대기 중의 마지막 라운드만 처음부터 펼친다.
+    return (
+      <section id={`round-${round.roundNo}`} className="card p-6 sm:p-7">
+        <details open={!collapsed}>
+          <summary className="cursor-pointer">
+            <div className="inline-block w-[calc(100%-1.5rem)] align-top">
+              {heading}
+              <p className="mt-1.5 text-[13px] leading-5 text-stone-600 tabular-nums">
+                {roundMetaLine(round)}
+              </p>
+            </div>
+          </summary>
+          <div className="mt-5">
+            {round.digest ? (
+              <DigestView
+                digest={round.digest}
+                questions={round.questions}
+                submissions={round.submissions}
+              />
+            ) : (
+              <p className="text-sm text-stone-500">정리된 내용이 없습니다.</p>
+            )}
+            <RawAnswers round={round} />
+          </div>
+        </details>
+      </section>
+    );
+  }
+
   return (
-    <section className="card p-6 sm:p-7">
-      <div className="mb-5 flex items-baseline justify-between gap-4">
-        <h2 className="font-display text-xl font-semibold text-stone-900">
-          {round.roundNo}라운드
-          <span className="ml-1.5 text-sm font-normal text-stone-400 tabular-nums">
-            / {totalRounds}
-          </span>
-        </h2>
-        <span className={status.cls}>{status.label}</span>
-      </div>
+    <section id={`round-${round.roundNo}`} className="card p-6 sm:p-7">
+      <div className="mb-5">{heading}</div>
 
       {round.status === "draft" && (
         <>
@@ -360,31 +412,16 @@ function RoundCard({
 
       {round.status === "open" && (
         <>
-          <ShareBox url={shareUrl} />
+          {/* 아직 아무도 답하지 않았으면 링크 보내기가 할 일이라 위에 크게, 답이 오기 시작하면 맨 아래 한 줄로 */}
+          {round.submissionCount === 0 && <ShareBox url={shareUrl} />}
 
-          {round.intro && (
-            <p className="mt-5 border-l-2 border-stone-300 pl-4 text-[15px] leading-relaxed text-stone-700">
-              {round.intro}
-            </p>
-          )}
-
-          <ol className="mt-5 space-y-2">
-            {round.questions.map((question, index) => (
-              <li key={question.id} className="text-[15px] leading-relaxed">
-                <span className="mr-2 font-display text-stone-400 tabular-nums">Q{index + 1}</span>
-                <span className="text-stone-800">{question.text}</span>
-                <span className="ml-2 text-xs text-stone-500">{kindLabel(question.kind)}</span>
-              </li>
-            ))}
-          </ol>
-
-          <div className="mt-6">
+          <div className={round.submissionCount === 0 ? "mt-6" : ""}>
             <ResponseStatus
               meetingTitle={meetingTitle}
               roundNo={round.roundNo}
               shareUrl={shareUrl}
               expected={expected}
-              submitted={round.submissions.map((s) => s.participantName)}
+              submitted={round.submissions.map((s) => ({ name: s.participantName, at: s.submittedAt }))}
               deadlineAt={round.deadlineAt}
             />
           </div>
@@ -392,7 +429,7 @@ function RoundCard({
           <Distribution round={round} />
 
           <button
-            className="btn-primary mt-5"
+            className="btn-primary mt-6"
             disabled={busy !== null || round.submissionCount === 0}
             onClick={() => void onClose()}
           >
@@ -402,29 +439,50 @@ function RoundCard({
                 ? "마감하고 의견 정리 + 재질문 만들기"
                 : "마감하고 의견 정리하기"}
           </button>
-        </>
-      )}
 
-      {round.status === "closed" && (
-        <>
-          {round.digest ? (
-            <DigestView
-              digest={round.digest}
-              questions={round.questions}
-              submissions={round.submissions}
-            />
-          ) : (
-            <p className="text-sm text-stone-500">정리된 내용이 없습니다.</p>
-          )}
-          <RawAnswers round={round} />
+          <details className="mt-6 border-t border-stone-200 pt-4">
+            <summary className="cursor-pointer text-[13px] text-stone-500 hover:text-stone-900">
+              안내문과 질문 {round.questions.length}개 보기
+            </summary>
+            {round.intro && (
+              <p className="mt-4 border-l-2 border-stone-300 pl-4 text-[15px] leading-relaxed text-stone-700">
+                {round.intro}
+              </p>
+            )}
+            <ol className="mt-4 space-y-2">
+              {round.questions.map((question, index) => (
+                <li key={question.id} className="text-[15px] leading-relaxed">
+                  <span className="mr-2 font-display text-stone-400 tabular-nums">Q{index + 1}</span>
+                  <span className="text-stone-800">{question.text}</span>
+                  <span className="ml-2 text-xs text-stone-500">{kindLabel(question.kind)}</span>
+                </li>
+              ))}
+            </ol>
+          </details>
+
+          {round.submissionCount > 0 && <ShareLine url={shareUrl} />}
         </>
       )}
     </section>
   );
 }
 
-function ShareBox({ url }: { url: string }) {
+function useCopy(url: string) {
   const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  }
+  return { copied, copy };
+}
+
+function ShareBox({ url }: { url: string }) {
+  const { copied, copy } = useCopy(url);
   return (
     <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4">
       <p className="text-sm font-medium text-emerald-900">참여자에게 이 링크를 보내세요</p>
@@ -433,18 +491,7 @@ function ShareBox({ url }: { url: string }) {
       </p>
       <div className="mt-3 flex gap-2">
         <input readOnly className="input bg-white font-mono text-xs" value={url} />
-        <button
-          className="btn-ghost shrink-0"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(url);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1500);
-            } catch {
-              setCopied(false);
-            }
-          }}
-        >
+        <button className="btn-ghost shrink-0" onClick={() => void copy()}>
           {copied ? "복사됨" : "복사"}
         </button>
       </div>
@@ -452,27 +499,60 @@ function ShareBox({ url }: { url: string }) {
   );
 }
 
-/** 수집 중 응답 분포. 마감 전에 분포를 보고 마감 시점을 정할 수 있게 한다. */
+/** 답이 오기 시작한 뒤의 공유 링크. 한 줄이면 충분하다. */
+function ShareLine({ url }: { url: string }) {
+  const { copied, copy } = useCopy(url);
+  return (
+    <p className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-5 text-stone-600">
+      참여자 링크
+      <code className="font-mono text-xs text-stone-800">{url}</code>
+      <button type="button" className="btn-quiet" onClick={() => void copy()}>
+        {copied ? "복사됨" : "복사"}
+      </button>
+    </p>
+  );
+}
+
+/**
+ * 수집 중 응답 분포. 질문당 한 줄 요약을 항상 보여주고, 막대는 펼쳐서 본다.
+ * 마감 전에 분포를 보고 마감 시점을 정하는 용도.
+ */
 function Distribution({ round }: { round: HostRound }) {
   const questions = round.questions
-    .map((question, index) => ({ question, index }))
-    .filter(({ question }) => question.kind !== "open");
+    .map((question, index) => ({ question, index, stats: summarize(question, round.submissions) }))
+    .filter((entry) => entry.stats !== null);
   if (questions.length === 0) return null;
   return (
     <div className="mt-6 border-t border-stone-200 pt-4">
       <p className="text-sm font-medium text-stone-900">응답 분포</p>
-      <ul className="mt-3 space-y-5">
-        {questions.map(({ question, index }) => (
-          <li key={question.id}>
-            <p className="mb-2 text-[13px] leading-5 text-stone-700">
-              <span className="mr-2 font-display text-stone-400 tabular-nums">Q{index + 1}</span>
-              {question.text}
-              <span className="ml-2 text-xs text-stone-500">{kindLabel(question.kind)}</span>
-            </p>
-            <AnswerStats question={question} submissions={round.submissions} />
+      <ul className="mt-2 space-y-1.5">
+        {questions.map(({ question, index, stats }) => (
+          <li key={question.id} className="text-[13px] leading-5 text-stone-600">
+            <span className="mr-2 font-display text-stone-400 tabular-nums">Q{index + 1}</span>
+            <span className="font-medium text-stone-900 tabular-nums">
+              {statsLine(question, stats!)}
+            </span>
+            <span className="mx-1.5 text-stone-300">·</span>
+            <span className="text-stone-500">{question.text}</span>
           </li>
         ))}
       </ul>
+      <details className="mt-3">
+        <summary className="cursor-pointer text-[13px] text-stone-500 hover:text-stone-900">
+          막대로 보기
+        </summary>
+        <ul className="mt-3 space-y-5">
+          {questions.map(({ question, index }) => (
+            <li key={question.id}>
+              <p className="mb-2 text-[13px] leading-5 text-stone-700">
+                <span className="mr-2 font-display text-stone-400 tabular-nums">Q{index + 1}</span>
+                {question.text}
+              </p>
+              <AnswerStats question={question} submissions={round.submissions} />
+            </li>
+          ))}
+        </ul>
+      </details>
     </div>
   );
 }

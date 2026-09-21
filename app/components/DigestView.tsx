@@ -1,7 +1,9 @@
 "use client";
 
 import type { Question, RoundDigest } from "@/lib/types";
-import AnswerStats, { type StatsSubmission } from "./AnswerStats";
+import { aiVerdict, verdictTone } from "@/lib/report";
+import type { StatsSubmission } from "@/lib/stats";
+import AnswerStats from "./AnswerStats";
 
 interface Props {
   digest: RoundDigest;
@@ -9,6 +11,12 @@ interface Props {
   /** 있으면 질문별 요약 옆에 선택형 · 척도 응답 분포를 같이 그린다 */
   submissions?: StatsSubmission[];
 }
+
+const TONE_CLASS = {
+  red: "font-semibold text-red-600",
+  emerald: "font-semibold text-emerald-700",
+  amber: "font-semibold text-amber-700",
+} as const;
 
 /** 한 라운드 답변을 AI가 정리한 결과 */
 export default function DigestView({ digest, questions, submissions }: Props) {
@@ -18,15 +26,9 @@ export default function DigestView({ digest, questions, submissions }: Props) {
     <div className="space-y-6">
       <p className="text-[15px] leading-relaxed text-stone-800">{digest.overview}</p>
 
-      {/* AI 판단: 축 이름을 붙인 한 줄. 칩 두 개를 나란히 두면 모순처럼 읽힌다. */}
+      {/* AI 판단은 한 단어 + 이유. 두 축을 나란히 두면 모순처럼 읽힌다. */}
       <p className="text-[13px] leading-5 text-stone-600">
-        <span className={digest.decisionReady ? "font-semibold text-emerald-700" : "font-semibold text-amber-700"}>
-          결론 {digest.decisionReady ? "가능" : "미정"}
-        </span>
-        <span className="mx-1.5 text-stone-300">·</span>
-        <span className={digest.meetingNeeded?.needed ? "font-semibold text-red-700" : "font-semibold text-stone-700"}>
-          회의 {digest.meetingNeeded?.needed ? "필요" : "불필요"}
-        </span>
+        <span className={TONE_CLASS[verdictTone(digest)]}>{aiVerdict(digest)}</span>
         {digest.meetingNeeded?.reason && (
           <>
             <span className="mx-1.5 text-stone-300">·</span>

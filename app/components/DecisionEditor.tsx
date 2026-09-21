@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import type { Decision, RoundDigest } from "@/lib/types";
 import { draftDecision, type DecisionInput } from "@/lib/decision";
-import { formatDateTime } from "@/lib/report";
+import { evidenceBeyondDecision, formatDateTime } from "@/lib/report";
+import DecisionDoc from "./DecisionDoc";
 
 interface Props {
   /** 확정된 결론. 없으면 초안 편집 상태로 시작한다 */
@@ -39,10 +40,21 @@ export default function DecisionEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decidedAt]);
 
+  const lastDigest = digests[digests.length - 1] ?? null;
+  const positionsByTopic =
+    decision && lastDigest ? evidenceBeyondDecision(lastDigest, decision).positionsByTopic : undefined;
+
   return (
-    <section className="card p-6 sm:p-7">
+    <section id="decision" className="card p-6 sm:p-7">
       <div className="mb-5 flex items-baseline justify-between gap-4">
-        <h2 className="font-display text-xl font-semibold text-stone-900">결론</h2>
+        <h2 className="font-display text-xl font-semibold text-stone-900">
+          결론
+          {decision && (
+            <span className="ml-2 text-[13px] font-normal text-stone-500 tabular-nums">
+              정해진 것 {decision.decided.length} · 모여서 정할 것 {decision.toMeet.length}
+            </span>
+          )}
+        </h2>
         <span className={decision ? "status status-done" : "status status-wait"}>
           {decision ? "확정됨" : "결정 대기"}
         </span>
@@ -50,9 +62,9 @@ export default function DecisionEditor({
 
       {decision && !editing ? (
         <div className="space-y-5">
-          <DecisionSummary decision={decision} />
+          <DecisionDoc decision={decision} all={participantNames} positionsByTopic={positionsByTopic} />
           <div className="flex items-center justify-between">
-            <p className="text-xs text-stone-400">{formatDateTime(decision.decidedAt)} 확정</p>
+            <p className="text-xs text-stone-500 tabular-nums">{formatDateTime(decision.decidedAt)} 확정</p>
             <button type="button" className="btn-quiet" onClick={() => setEditing(true)}>
               결정 수정
             </button>
@@ -275,63 +287,6 @@ function Editor({
           </button>
         )}
       </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-
-/** 확정된 결론을 읽기 전용으로. 주최자 화면과 리포트 화면이 같이 쓴다. */
-export function DecisionSummary({ decision }: { decision: Decision }) {
-  return (
-    <div className="space-y-5">
-      <div>
-        <Heading tone="emerald">정해진 것</Heading>
-        {decision.decided.length === 0 ? (
-          <p className="pl-3 text-sm text-stone-400">없음</p>
-        ) : (
-          <ul className="space-y-2 pl-3">
-            {decision.decided.map((item, index) => (
-              <li key={index}>
-                <p className="text-[15px] text-stone-800">{item.point}</p>
-                {item.basis && <p className="mt-0.5 text-xs text-stone-500">근거 · {item.basis}</p>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div>
-        <Heading tone="amber">모여서 정할 것</Heading>
-        {decision.toMeet.length === 0 ? (
-          <p className="pl-3 text-sm text-stone-600">없음. 모일 필요가 없습니다.</p>
-        ) : (
-          <ul className="space-y-3 pl-3">
-            {decision.toMeet.map((item, index) => (
-              <li key={index}>
-                <p className="text-[15px] font-medium text-stone-900">{item.topic}</p>
-                {item.crux && <p className="mt-0.5 text-xs text-stone-500">쟁점 · {item.crux}</p>}
-                {item.attendees.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {item.attendees.map((name) => (
-                      <span key={name} className="chip bg-stone-100 text-stone-700">
-                        {name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {decision.note && (
-        <div>
-          <Heading tone="stone">메모</Heading>
-          <p className="whitespace-pre-wrap pl-3 text-sm text-stone-700">{decision.note}</p>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatDateTime } from "@/lib/report";
+import { formatDateTime, formatShort } from "@/lib/report";
+
+export interface SubmittedEntry {
+  name: string;
+  at: string;
+}
 
 interface Props {
   meetingTitle: string;
@@ -9,12 +14,15 @@ interface Props {
   shareUrl: string;
   /** 주최자가 적어 둔 예상 참여자. 비어 있으면 인원 비교와 미응답자 표시는 생략 */
   expected: string[];
-  /** 지금까지 제출한 사람 이름 */
-  submitted: string[];
+  /** 지금까지 제출한 사람과 시각 */
+  submitted: SubmittedEntry[];
   deadlineAt: string | null;
 }
 
-/** 답변 수집 중 현황: 몇 명이 답했고, 누가 아직이고, 기한까지 얼마나 남았는지. 리마인드 문구 복사까지. */
+/**
+ * 답변 수집 중 현황: 몇 명이 답했고, 누가 아직이고, 기한까지 얼마나 남았는지. 리마인드 문구 복사까지.
+ * 명단은 한 줄: 예상 참여자 순서대로 답한 사람은 채운 점, 아직이면 빈 점.
+ */
 export default function ResponseStatus({
   meetingTitle,
   roundNo,
@@ -23,7 +31,14 @@ export default function ResponseStatus({
   submitted,
   deadlineAt,
 }: Props) {
-  const missing = expected.filter((name) => !submitted.some((s) => sameName(s, name)));
+  const done = (name: string) => submitted.some((s) => sameName(s.name, name));
+  const missing = expected.filter((name) => !done(name));
+  // 예상 명단에 없는데 답한 사람도 명단 뒤에 붙인다.
+  const extras = submitted
+    .map((s) => s.name)
+    .filter((name) => !expected.some((e) => sameName(name, e)));
+  const roster = expected.length ? [...expected, ...extras] : submitted.map((s) => s.name);
+  const lastAt = submitted.map((s) => s.at).sort().at(-1) ?? null;
   const remaining = useRemaining(deadlineAt);
   const [copied, setCopied] = useState<"idle" | "copied" | "failed">("idle");
 
@@ -45,7 +60,7 @@ export default function ResponseStatus({
   }
 
   return (
-    <div className="border-t border-stone-200 pt-4">
+    <div>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <p className="text-sm font-medium text-stone-900">
           답변 <span className="tabular-nums">{submitted.length}</span>
@@ -53,6 +68,11 @@ export default function ResponseStatus({
             <span className="text-stone-500 tabular-nums"> / 예상 {expected.length}</span>
           )}
           명
+          {lastAt && (
+            <span className="ml-2 text-xs font-normal text-stone-500 tabular-nums">
+              마지막 답변 {formatShort(lastAt)}
+            </span>
+          )}
           {submitted.length === 0 && (
             <span className="ml-2 font-normal text-stone-500">아직 응답이 없습니다</span>
           )}
@@ -69,27 +89,23 @@ export default function ResponseStatus({
         )}
       </div>
 
-      {submitted.length > 0 && (
-        <ul className="mt-2 flex flex-wrap gap-1.5">
-          {submitted.map((name) => (
-            <li key={name} className="chip bg-stone-100 text-stone-700">
+      {roster.length > 0 && (
+        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+          {roster.map((name) => (
+            <li
+              key={name}
+              className={done(name) ? "status status-done text-stone-900" : "status"}
+              title={done(name) ? "답변함" : "아직 답변 전"}
+            >
               {name}
             </li>
           ))}
         </ul>
       )}
 
-      {expected.length > 0 && (
-        <p className="mt-3 text-[13px] leading-5 text-stone-600">
-          {missing.length === 0 ? (
-            <span className="font-medium text-emerald-700">예상 참여자가 모두 답했습니다.</span>
-          ) : (
-            <>
-              <span className="font-medium text-stone-700">아직 답변 전</span>
-              <span className="mx-1.5 text-stone-300">·</span>
-              {missing.join(", ")}
-            </>
-          )}
+      {expected.length > 0 && missing.length === 0 && (
+        <p className="mt-2 text-[13px] leading-5 font-medium text-emerald-700">
+          예상 참여자가 모두 답했습니다.
         </p>
       )}
 
