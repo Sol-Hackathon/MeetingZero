@@ -2,17 +2,21 @@
 
 import { Fragment, Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import AnswerStats from "@/app/components/AnswerStats";
+import DecisionDoc from "@/app/components/DecisionDoc";
 import ReportActions from "@/app/components/ReportActions";
 import {
   aiOpinion,
-  aiVerdict,
+  attendeesFact,
+  evidenceBeyondDecision,
   firstSentence,
-  formatDateTime,
   lastClosedRound,
   namesLabel,
   oneLineSummary,
   questionLabel,
   reportSummary,
+  roundMetaLine,
+  type Evidence,
   type ReportData,
   type ReportRound,
 } from "@/lib/report";
@@ -25,6 +29,7 @@ interface HostResponse {
 
 /*
  * 인쇄용 리포트. 대시보드가 아니라 문서라서 칩 · 카드 · 색 막대를 쓰지 않는다.
+ * 부록의 분포 막대만 예외이고, 그것도 무채색만 쓴다.
  * 순서는 lib/report.ts 의 마크다운과 같다: 결론 → 근거 → 진행 경과 → 배경 → 부록.
  *
  * 글자 크기 단계: 제목 2xl/3xl · 섹션 xl · 소제목 base · 본문 15px · 보조 13px · 메타 xs
@@ -78,45 +83,42 @@ function ReportView() {
   const { meeting, rounds, decision } = data;
   const summary = reportSummary(data);
   const last = lastClosedRound(rounds);
+  const evidence = last?.digest ? evidenceBeyondDecision(last.digest, decision) : null;
+  const attendees = attendeesFact(decision, summary.participants);
   const answered = rounds.filter((round) => round.submissions.length > 0);
 
   return (
     <main className="mx-auto max-w-2xl px-5 py-10 print:max-w-none print:px-0 print:py-0">
-      <div className="mb-10 flex flex-wrap items-center gap-2 print:hidden">
-        <a href={`/m/${meetingId}?t=${encodeURIComponent(hostToken)}`} className="btn-ghost">
-          ← 주최자 화면
-        </a>
-        <button type="button" className="btn-primary" onClick={() => window.print()}>
-          인쇄 · PDF 저장
-        </button>
-        <ReportActions meetingId={meetingId} hostToken={hostToken} hideViewLink />
-      </div>
-
       <article>
         <header>
-          <h1 className="font-display text-3xl font-semibold leading-tight text-stone-900 sm:text-4xl">
+          <h1 className="text-balance font-display text-3xl font-semibold leading-tight text-stone-900 sm:text-4xl">
             {meeting.title}
           </h1>
-          <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[13px] leading-5 text-stone-700">
-            {meeting.goal && (
+          {meeting.goal && (
+            <p className="mt-3 text-[15px] leading-relaxed text-stone-600">
+              <span className="mr-2 text-[13px] font-medium text-stone-500">목표</span>
+              {meeting.goal}
+            </p>
+          )}
+          <p className="mt-3 text-[13px] leading-5 text-stone-600 tabular-nums">{summary.metaLine}</p>
+          <p className="text-[13px] leading-5 text-stone-600">
+            참여자 <span className="tabular-nums">{summary.participants.length}</span>명
+            {summary.participants.length > 0 && (
               <>
-                <dt className="text-stone-500">목표</dt>
-                <dd>{meeting.goal}</dd>
+                <span className="mx-1.5 text-stone-300">·</span>
+                {summary.participants.join(", ")}
               </>
             )}
-            <dt className="text-stone-500">기간</dt>
-            <dd className="tabular-nums">
-              {summary.period} · {summary.closedRoundCount}라운드
-            </dd>
-            <dt className="text-stone-500">참여자</dt>
-            <dd>
-              {summary.participants.length
-                ? `${summary.participants.join(", ")} (${summary.participants.length}명)`
-                : "없음"}
-            </dd>
-            <dt className="text-stone-500">상태</dt>
-            <dd className="tabular-nums">{summary.outcome}</dd>
-          </dl>
+          </p>
+          <div className="mt-5 flex flex-wrap items-center gap-2 print:hidden">
+            <a href={`/m/${meetingId}?t=${encodeURIComponent(hostToken)}`} className="btn-ghost">
+              ← 주최자 화면
+            </a>
+            <button type="button" className="btn-ghost" onClick={() => window.print()}>
+              인쇄 · PDF 저장
+            </button>
+            <ReportActions meetingId={meetingId} hostToken={hostToken} hideViewLink />
+          </div>
         </header>
 
         {/* 결론: 문서에서 가장 눈에 띄어야 한다 */}
@@ -124,15 +126,28 @@ function ReportView() {
         <p className="font-display text-xl font-medium leading-snug text-stone-900">
           {oneLineSummary(data)}
         </p>
+        {attendees && (
+          <p className="mt-2 text-[13px] leading-5 text-stone-600">
+            참석 필요
+            <span className="mx-1.5 text-stone-300">·</span>
+            <span className="font-medium text-stone-900">{attendees}</span>
+          </p>
+        )}
         {decision ? (
-          <DecisionDoc decision={decision} all={summary.participants} />
+          <div className="mt-6">
+            <DecisionDoc
+              decision={decision}
+              all={summary.participants}
+              positionsByTopic={evidence?.positionsByTopic}
+            />
+          </div>
         ) : (
           <p className="mt-4 text-[15px] leading-relaxed text-stone-600">
             아직 확정되지 않았습니다. 주최자 화면에서 결론을 확정하면 여기에 표시됩니다.
           </p>
         )}
 
-        {last?.digest && (
+        {last?.digest && evidence && (
           <>
             <SectionTitle>
               근거
@@ -140,6 +155,7 @@ function ReportView() {
             </SectionTitle>
             <EvidenceDoc
               digest={last.digest}
+              evidence={evidence}
               all={summary.participants}
               showConsensus={decision === null}
             />
@@ -149,7 +165,7 @@ function ReportView() {
         {rounds.length > 0 && (
           <>
             <SectionTitle>진행 경과</SectionTitle>
-            <ProgressTable rounds={rounds} />
+            <ProgressList rounds={rounds} />
           </>
         )}
 
@@ -178,70 +194,14 @@ function ReportView() {
 /* 섹션                                                                 */
 /* ------------------------------------------------------------------ */
 
-function DecisionDoc({ decision, all }: { decision: Decision; all: string[] }) {
-  return (
-    <div className="mt-6 space-y-7">
-      <div>
-        <Subheading>정해진 것</Subheading>
-        {decision.decided.length === 0 ? (
-          <p className="text-[15px] text-stone-500">없음</p>
-        ) : (
-          <ol className="space-y-3 border-l-[3px] border-emerald-500 pl-4">
-            {decision.decided.map((item, index) => (
-              <li key={index} className="break-inside-avoid">
-                <p className="text-base font-medium leading-relaxed text-stone-900">
-                  <Num>{index + 1}.</Num>
-                  {item.point}
-                </p>
-                {item.basis && <Sub>근거: {item.basis}</Sub>}
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
-
-      <div>
-        <Subheading>모여서 정할 것</Subheading>
-        {decision.toMeet.length === 0 ? (
-          <p className="text-[15px] text-stone-700">없음. 모일 필요가 없습니다.</p>
-        ) : (
-          <ol className="space-y-3 border-l-[3px] border-amber-500 pl-4">
-            {decision.toMeet.map((item, index) => (
-              <li key={index} className="break-inside-avoid">
-                <p className="text-base font-medium leading-relaxed text-stone-900">
-                  <Num>{index + 1}.</Num>
-                  {item.topic}
-                </p>
-                {item.crux && <Sub>쟁점: {item.crux}</Sub>}
-                {item.attendees.length > 0 && <Sub>참석: {namesLabel(item.attendees, all)}</Sub>}
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
-
-      {decision.note && (
-        <div>
-          <Subheading>주최자 메모</Subheading>
-          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-stone-800">
-            {decision.note}
-          </p>
-        </div>
-      )}
-
-      <p className="text-xs leading-5 text-stone-500 tabular-nums">
-        {formatDateTime(decision.decidedAt)} 확정
-      </p>
-    </div>
-  );
-}
-
 function EvidenceDoc({
   digest,
+  evidence,
   all,
   showConsensus,
 }: {
   digest: RoundDigest;
+  evidence: Evidence;
   all: string[];
   showConsensus: boolean;
 }) {
@@ -270,11 +230,11 @@ function EvidenceDoc({
         </div>
       )}
 
-      {digest.conflicts.length > 0 && (
+      {evidence.conflicts.length > 0 && (
         <div>
           <Subheading>의견이 갈린 지점</Subheading>
           <ul className="space-y-4">
-            {digest.conflicts.map((conflict, index) => (
+            {evidence.conflicts.map((conflict, index) => (
               <li key={index} className="break-inside-avoid">
                 <p className="text-[15px] font-medium leading-relaxed text-stone-900">
                   {conflict.topic}
@@ -297,11 +257,11 @@ function EvidenceDoc({
         </div>
       )}
 
-      {digest.unresolved.length > 0 && (
+      {evidence.unresolved.length > 0 && (
         <div>
           <Subheading>정보가 부족한 지점</Subheading>
           <ul className="space-y-2">
-            {digest.unresolved.map((item, index) => (
+            {evidence.unresolved.map((item, index) => (
               <li key={index} className="break-inside-avoid">
                 <p className="text-[15px] leading-relaxed text-stone-800">{item.topic}</p>
                 {item.whyOpen && <Sub>{item.whyOpen}</Sub>}
@@ -318,44 +278,28 @@ function EvidenceDoc({
   );
 }
 
-function ProgressTable({ rounds }: { rounds: ReportRound[] }) {
+/** 라운드마다 두 줄: 번호와 메타 한 줄, 첫 문장 한 줄. 표 대신 목록이라 폰에서도 가로 스크롤이 없다. */
+function ProgressList({ rounds }: { rounds: ReportRound[] }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-[13px] leading-5">
-        <thead>
-          <tr className="border-b border-stone-300 text-left text-xs text-stone-500">
-            <th className="py-1.5 pr-3 font-medium">라운드</th>
-            <th className="py-1.5 pr-3 font-medium">마감</th>
-            <th className="py-1.5 pr-3 font-medium">답변</th>
-            <th className="py-1.5 pr-3 font-medium">질문</th>
-            <th className="py-1.5 pr-3 font-medium">AI 판단</th>
-            <th className="py-1.5 font-medium">한 줄</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rounds.map((round) => (
-            <tr key={round.id} className="border-b border-stone-200 align-top">
-              <td className="py-2 pr-3 font-medium text-stone-900 tabular-nums">{round.roundNo}</td>
-              <td className="whitespace-nowrap py-2 pr-3 text-stone-600 tabular-nums">
-                {round.status === "closed"
-                  ? formatDateTime(round.closedAt)
-                  : round.status === "open"
-                    ? "수집 중"
-                    : "검토 중"}
-              </td>
-              <td className="py-2 pr-3 text-stone-600 tabular-nums">{round.submissions.length}명</td>
-              <td className="py-2 pr-3 text-stone-600 tabular-nums">{round.questions.length}개</td>
-              <td className="whitespace-nowrap py-2 pr-3 text-stone-600">
-                {round.digest ? aiVerdict(round.digest) : ""}
-              </td>
-              <td className="py-2 text-stone-700">
-                {round.digest ? firstSentence(round.digest.overview) : ""}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <ol className="divide-y divide-stone-200 border-y border-stone-200">
+      {rounds.map((round) => (
+        <li key={round.id} className="break-inside-avoid py-3">
+          <p>
+            <span className="font-display text-base font-semibold text-stone-900 tabular-nums">
+              {round.roundNo}라운드
+            </span>
+            <span className="ml-2 text-[13px] leading-5 text-stone-600 tabular-nums">
+              {roundMetaLine(round)}
+            </span>
+          </p>
+          {round.digest && (
+            <p className="mt-1 text-[15px] leading-relaxed text-stone-800">
+              {firstSentence(round.digest.overview)}
+            </p>
+          )}
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -397,19 +341,25 @@ function AppendixRound({ round }: { round: ReportRound }) {
                   {perQuestion.summary}
                 </p>
               )}
-              <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[15px] leading-relaxed">
-                {round.submissions.map((submission) => {
-                  const answer = submission.answers.find((a) => a.questionId === question.id);
-                  return (
-                    <Fragment key={`${submission.participantName}-${submission.submittedAt}`}>
-                      <dt className="font-medium text-stone-900">{submission.participantName}</dt>
-                      <dd className="whitespace-pre-wrap text-stone-700">
-                        {answer?.value?.trim() || "(무응답)"}
-                      </dd>
-                    </Fragment>
-                  );
-                })}
-              </dl>
+              {question.kind === "open" ? (
+                <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[15px] leading-relaxed">
+                  {round.submissions.map((submission) => {
+                    const answer = submission.answers.find((a) => a.questionId === question.id);
+                    return (
+                      <Fragment key={`${submission.participantName}-${submission.submittedAt}`}>
+                        <dt className="font-medium text-stone-900">{submission.participantName}</dt>
+                        <dd className="whitespace-pre-wrap text-stone-700">
+                          {answer?.value?.trim() || "(무응답)"}
+                        </dd>
+                      </Fragment>
+                    );
+                  })}
+                </dl>
+              ) : (
+                <div className="mt-3">
+                  <AnswerStats question={question} submissions={round.submissions} />
+                </div>
+              )}
             </div>
           );
         })}
@@ -426,7 +376,7 @@ function SectionTitle({ children, primary }: { children: React.ReactNode; primar
   return (
     <h2
       className={`mb-4 break-after-avoid font-display text-2xl font-semibold text-stone-900 ${
-        primary ? "mt-10 border-t-2 border-stone-900 pt-4" : "mt-12 border-b border-stone-300 pb-2"
+        primary ? "mt-8 border-t-2 border-stone-900 pt-4" : "mt-12 border-b border-stone-300 pb-2"
       }`}
     >
       {children}
