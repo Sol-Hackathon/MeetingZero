@@ -9,7 +9,8 @@
     "lint": "next lint",
     "check-ai": "node --env-file-if-exists=.env.local scripts/check-ai.mjs",
     "list-models": "node --env-file-if-exists=.env.local scripts/list-models.mjs",
-    "seed": "node --env-file-if-exists=.env.local scripts/seed.mjs"
+    "seed": "node --env-file-if-exists=.env.local scripts/seed.mjs",
+    "serve": "powershell -ExecutionPolicy Bypass -File scripts/serve.ps1"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
