@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { normalizeMeetingCode } from "@/lib/code";
 
 interface SavedMeeting {
   id: string;
@@ -43,8 +44,45 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hosted, setHosted] = useState<SavedMeeting[]>([]);
+  const [code, setCode] = useState("");
+  const [entering, setEntering] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   useEffect(() => setHosted(loadHosted()), []);
+
+  function remember(entry: SavedMeeting) {
+    const rest = loadHosted().filter((m) => m.id !== entry.id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([entry, ...rest].slice(0, 20)));
+  }
+
+  async function enter(event: React.FormEvent) {
+    event.preventDefault();
+    setCodeError(null);
+    if (!normalizeMeetingCode(code)) {
+      setCodeError("회의 코드는 영문과 숫자 8자입니다. 예: K7MQ-2XW9");
+      return;
+    }
+    setEntering(true);
+    try {
+      const response = await fetch("/api/meetings/enter", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "회의를 찾지 못했습니다.");
+      remember({
+        id: data.meetingId,
+        title: data.title,
+        hostToken: data.hostToken,
+        createdAt: new Date().toISOString(),
+      });
+      router.push(`/m/${data.meetingId}?t=${encodeURIComponent(data.hostToken)}`);
+    } catch (caught) {
+      setCodeError(caught instanceof Error ? caught.message : String(caught));
+      setEntering(false);
+    }
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -59,13 +97,12 @@ export default function HomePage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "질문 생성에 실패했습니다.");
 
-      const entry: SavedMeeting = {
+      remember({
         id: data.meetingId,
         title,
         hostToken: data.hostToken,
         createdAt: new Date().toISOString(),
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([entry, ...loadHosted()].slice(0, 20)));
+      });
       router.push(`/m/${data.meetingId}?t=${encodeURIComponent(data.hostToken)}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -212,6 +249,34 @@ export default function HomePage() {
           {loading ? "질문을 만드는 중… (최대 1분)" : "질문 만들기"}
         </button>
       </form>
+
+      <section className="mt-14">
+        <h2 className="eyebrow">만든 회의 관리하기</h2>
+        <p className="mt-3 text-[15px] leading-relaxed text-stone-600">
+          회의를 만들 때 받은 회의 코드를 넣으면 어느 기기에서든 그 회의의 관리 화면으로 들어갑니다.
+          코드는 주최자 화면 위쪽에 있습니다.
+        </p>
+        <form onSubmit={enter} className="mt-4 flex flex-wrap items-start gap-2">
+          <div className="min-w-0 flex-1 basis-56">
+            <label className="sr-only" htmlFor="meeting-code">
+              회의 코드
+            </label>
+            <input
+              id="meeting-code"
+              className="input font-mono uppercase tracking-wider"
+              placeholder="K7MQ-2XW9"
+              autoComplete="off"
+              spellCheck={false}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+          </div>
+          <button type="submit" className="btn-ghost shrink-0" disabled={entering}>
+            {entering ? "찾는 중…" : "관리 화면으로"}
+          </button>
+          {codeError && <p className="basis-full text-[13px] leading-5 text-red-700">{codeError}</p>}
+        </form>
+      </section>
 
       {hosted.length > 0 && (
         <section className="mt-14">

@@ -10,6 +10,7 @@ import AnswerStats from "@/app/components/AnswerStats";
 import ResponseStatus from "@/app/components/ResponseStatus";
 import { roundMetaLine } from "@/lib/report";
 import { statsLine, summarize } from "@/lib/stats";
+import { formatMeetingCode } from "@/lib/code";
 import type { Decision, DraftQuestion, Question, Round } from "@/lib/types";
 
 interface SubmissionView {
@@ -29,6 +30,7 @@ interface HostState {
     goal: string;
     maxRounds: number;
     status: string;
+    hostCode: string;
     decision: Decision | null;
     expectedParticipants: string[];
     createdAt: string;
@@ -220,6 +222,7 @@ function HostView() {
             {meeting.background}
           </p>
         </details>
+        {meeting.hostCode && <HostCode code={meeting.hostCode} />}
         {rounds.some((round) => round.status === "closed") && (
           <div className="mt-5">
             <ReportActions meetingId={meetingId} hostToken={hostToken} />
@@ -464,6 +467,31 @@ function RoundCard({
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * 회의 코드. 주최자가 다른 기기나 브라우저에서 첫 화면에 입력하면 이 회의의 관리 화면으로 들어온다.
+ * 참여자에게는 알려주지 않는다. 참여자는 /r/ 링크만 쓴다.
+ */
+function HostCode({ code }: { code: string }) {
+  const { copied, copy } = useCopy(formatMeetingCode(code));
+  return (
+    <div className="mt-4 border-l-[3px] border-stone-300 pl-4">
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-[13px] font-medium text-stone-500">회의 코드</span>
+        <span className="font-mono text-base font-semibold tracking-wider text-stone-900">
+          {formatMeetingCode(code)}
+        </span>
+        <button type="button" className="btn-quiet" onClick={() => void copy()}>
+          {copied ? "복사됨" : "복사"}
+        </button>
+      </p>
+      <p className="mt-1 text-[13px] leading-5 text-stone-500">
+        다른 기기에서 이 회의를 관리하려면 첫 화면에서 이 코드를 입력하세요. 참여자에게는 코드가 아니라
+        참여 링크를 보내세요.
+      </p>
+    </div>
   );
 }
 
