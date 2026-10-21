@@ -26,6 +26,7 @@ export async function GET(
         goal: meeting.goal,
         maxRounds: meeting.maxRounds,
         status: meeting.status,
+        hostCode: meeting.hostCode,
         decision: meeting.decision,
         expectedParticipants: meeting.expectedParticipants,
         createdAt: meeting.createdAt,
