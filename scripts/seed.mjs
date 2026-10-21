@@ -1,10 +1,10 @@
 // 시나리오 하나를 골라 회의 생성 → 참여자 답변 → 마감 → 재질문까지 자동으로 돌린다.
 //
 //   npm run seed 1          답변은 samples/scenarios.mjs 에 적힌 문구를 그대로 사용 (AI 호출 최소)
-//   npm run seed 1 --ai     답변도 페르소나대로 AI 가 작성 (더 현실적, 호출 많음)
+//   npm run seed -- 1 --ai     답변도 페르소나대로 AI 가 작성 (더 현실적, 호출 많음)
 //                           Gemini 키가 있으면 Gemini, 없고 AI_PROVIDER=claude-cli 면 Claude CLI 로 쓴다
 //   BASE=http://localhost:3117 npm run seed 3
-//   npm run seed 1 --ai --resume=<회의ID>:<주최자토큰>   중간에 실패한 회의를 안 닫힌 라운드부터 이어서 진행
+//   npm run seed -- 1 --ai --resume=<회의ID>:<주최자토큰>   중간에 실패한 회의를 안 닫힌 라운드부터 이어서 진행
 //
 // dev 서버가 먼저 떠 있어야 합니다.
 //
