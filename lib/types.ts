@@ -16,6 +16,8 @@ export interface Decision {
 export interface Meeting {
   id: string;
   hostToken: string;
+  /** 주최자가 다른 기기에서 입력해 들어오는 짧은 코드 (소문자 8자). 토큰과 달리 사람이 옮겨 적을 수 있다 */
+  hostCode: string;
   title: string;
   background: string;
   goal: string;

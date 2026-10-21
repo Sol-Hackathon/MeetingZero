@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { shortId, secretToken } from "./ids";
+import { meetingCode, shortId, secretToken } from "./ids";
 import type {
   Decision,
   DraftQuestion,
@@ -94,6 +94,7 @@ const ADDED_COLUMNS: { table: string; column: string; definition: string }[] = [
   { table: "meetings", column: "decision_json", definition: "TEXT" },
   { table: "meetings", column: "expected_json", definition: "TEXT" },
   { table: "rounds", column: "deadline_at", definition: "TEXT" },
+  { table: "meetings", column: "host_code", definition: "TEXT" },
 ];
 
 // dev 서버가 hot reload 될 때마다 커넥션이 새로 열리는 것을 막는다.
@@ -107,6 +108,7 @@ function getDb(): DatabaseSync {
     for (const { table, column, definition } of ADDED_COLUMNS) {
       ensureColumn(db, table, column, definition);
     }
+    backfillHostCodes(db);
     globalForDb.__meetinglessDb = db;
   }
   return globalForDb.__meetinglessDb;
@@ -116,6 +118,14 @@ function ensureColumn(db: DatabaseSync, table: string, column: string, definitio
   const columns = db.prepare(`SELECT name FROM pragma_table_info(?)`).all(table) as Row[];
   if (columns.some((c) => c.name === column)) return;
   db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
+/** 회의 코드가 생기기 전에 만든 회의에도 코드를 붙인다. 같은 코드가 두 번 나오지 않게 유니크 인덱스를 건다. */
+function backfillHostCodes(db: DatabaseSync): void {
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS meetings_host_code ON meetings(host_code)`);
+  const rows = db.prepare(`SELECT id FROM meetings WHERE host_code IS NULL`).all() as Row[];
+  const update = db.prepare(`UPDATE meetings SET host_code = ? WHERE id = ?`);
+  for (const row of rows) update.run(meetingCode(), String(row.id));
 }
 
 /** 여러 쓰기를 하나로 묶는다. 중간에 실패하면 전부 되돌린다. */
@@ -143,6 +153,7 @@ function toMeeting(row: Row): Meeting {
   return {
     id: String(row.id),
     hostToken: String(row.host_token),
+    hostCode: String(row.host_code ?? ""),
     title: String(row.title),
     background: String(row.background),
     goal: String(row.goal ?? ""),
@@ -197,6 +208,7 @@ export function createMeeting(input: {
   const meeting: Meeting = {
     id: shortId(10),
     hostToken: secretToken(),
+    hostCode: meetingCode(),
     title: input.title,
     background: input.background,
     goal: input.goal,
@@ -207,11 +219,12 @@ export function createMeeting(input: {
     createdAt: now(),
   };
   db.prepare(
-    `INSERT INTO meetings (id, host_token, title, background, goal, max_rounds, status, expected_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO meetings (id, host_token, host_code, title, background, goal, max_rounds, status, expected_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     meeting.id,
     meeting.hostToken,
+    meeting.hostCode,
     meeting.title,
     meeting.background,
     meeting.goal,
@@ -225,6 +238,12 @@ export function createMeeting(input: {
 
 export function getMeeting(id: string): Meeting | null {
   const row = getDb().prepare(`SELECT * FROM meetings WHERE id = ?`).get(id) as Row | undefined;
+  return row ? toMeeting(row) : null;
+}
+
+/** 회의 코드로 찾기. 코드는 normalizeMeetingCode 를 거친 소문자 8자 */
+export function findMeetingByCode(code: string): Meeting | null {
+  const row = getDb().prepare(`SELECT * FROM meetings WHERE host_code = ?`).get(code) as Row | undefined;
   return row ? toMeeting(row) : null;
 }
 
