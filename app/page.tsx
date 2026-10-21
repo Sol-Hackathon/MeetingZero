@@ -125,7 +125,33 @@ export default function HomePage() {
         </p>
       </header>
 
-      <ol className="mt-10 grid gap-6 border-y border-stone-200 py-6 sm:grid-cols-3 sm:gap-8">
+      <section className="mt-8 border-y border-stone-200 py-5">
+        <form onSubmit={enter} className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <label htmlFor="meeting-code" className="text-[15px] font-medium text-stone-900">
+            이미 만든 회의가 있나요?
+          </label>
+          <div className="flex min-w-0 flex-1 basis-64 items-center gap-2">
+            <input
+              id="meeting-code"
+              className="input font-mono uppercase tracking-wider"
+              placeholder="K7MQ-2XW9"
+              autoComplete="off"
+              spellCheck={false}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+            <button type="submit" className="btn-ghost shrink-0" disabled={entering}>
+              {entering ? "찾는 중…" : "관리 화면으로"}
+            </button>
+          </div>
+          <p className="basis-full text-[13px] leading-5 text-stone-500">
+            회의 코드는 주최자 화면 위쪽에 있습니다. 어느 기기에서든 코드만 있으면 관리 화면으로 들어갑니다.
+            {codeError && <span className="ml-2 text-red-700">{codeError}</span>}
+          </p>
+        </form>
+      </section>
+
+      <ol className="grid gap-6 border-b border-stone-200 py-6 sm:grid-cols-3 sm:gap-8">
         {STEPS.map(([name, description], index) => (
           <li key={name} className="flex gap-3 sm:block">
             <span className="font-display text-2xl font-semibold leading-none text-stone-300 tabular-nums">
@@ -250,33 +276,6 @@ export default function HomePage() {
         </button>
       </form>
 
-      <section className="mt-14">
-        <h2 className="eyebrow">만든 회의 관리하기</h2>
-        <p className="mt-3 text-[15px] leading-relaxed text-stone-600">
-          회의를 만들 때 받은 회의 코드를 넣으면 어느 기기에서든 그 회의의 관리 화면으로 들어갑니다.
-          코드는 주최자 화면 위쪽에 있습니다.
-        </p>
-        <form onSubmit={enter} className="mt-4 flex flex-wrap items-start gap-2">
-          <div className="min-w-0 flex-1 basis-56">
-            <label className="sr-only" htmlFor="meeting-code">
-              회의 코드
-            </label>
-            <input
-              id="meeting-code"
-              className="input font-mono uppercase tracking-wider"
-              placeholder="K7MQ-2XW9"
-              autoComplete="off"
-              spellCheck={false}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-            />
-          </div>
-          <button type="submit" className="btn-ghost shrink-0" disabled={entering}>
-            {entering ? "찾는 중…" : "관리 화면으로"}
-          </button>
-          {codeError && <p className="basis-full text-[13px] leading-5 text-red-700">{codeError}</p>}
-        </form>
-      </section>
 
       {hosted.length > 0 && (
         <section className="mt-14">
